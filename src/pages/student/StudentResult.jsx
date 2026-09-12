@@ -1,3 +1,4 @@
+
 import {
   useEffect,
   useState
@@ -149,6 +150,85 @@ function StudentResult() {
 
 
   // =========================================================
+  // CONVERT STUDENT ANSWER INTO OPTION IDS
+  // =========================================================
+
+  const getSelectedOptionIds = (studentAnswer) => {
+
+    if (!studentAnswer) {
+      return [];
+    }
+
+
+    // If backend stores something like:
+    // [1,2]
+    // ["1","2"]
+    // 1,2
+
+    let value = String(studentAnswer).trim();
+
+
+    if (!value) {
+      return [];
+    }
+
+
+    // Remove square brackets
+
+    value = value
+      .replace(/^\[/, "")
+      .replace(/\]$/, "");
+
+
+    // Remove quotes
+
+    value = value.replace(/"/g, "");
+
+    value = value.replace(/'/g, "");
+
+
+    return value
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id !== "");
+
+  };
+
+
+  // =========================================================
+  // CHECK WHETHER OPTION WAS SELECTED
+  // =========================================================
+
+  const isOptionSelected = (
+    studentAnswer,
+    optionId
+  ) => {
+
+    const selectedIds =
+      getSelectedOptionIds(studentAnswer);
+
+
+    return selectedIds.includes(
+      String(optionId)
+    );
+
+  };
+
+
+  // =========================================================
+  // GET TEST TYPE
+  // =========================================================
+
+  const getTestType = (answer) => {
+
+    return String(
+      answer?.testType || ""
+    ).toUpperCase();
+
+  };
+
+
+  // =========================================================
   // LOADING
   // =========================================================
 
@@ -177,6 +257,7 @@ function StudentResult() {
             className="spinner-border text-primary"
             role="status"
           ></div>
+
 
           <p className="mt-3">
             Loading result...
@@ -342,7 +423,7 @@ function StudentResult() {
 
 
   const passed =
-    status === "PASSED";
+    String(status).toUpperCase() === "PASSED";
 
 
   const answers =
@@ -360,7 +441,9 @@ function StudentResult() {
     <div className="min-vh-100 bg-light">
 
 
-      {/* ================= NAVBAR ================= */}
+      {/* =====================================================
+          NAVBAR
+      ===================================================== */}
 
       <nav className="navbar navbar-dark bg-dark">
 
@@ -401,12 +484,16 @@ function StudentResult() {
       </nav>
 
 
-      {/* ================= CONTENT ================= */}
+      {/* =====================================================
+          CONTENT
+      ===================================================== */}
 
       <div className="container py-5">
 
 
-        {/* ================= SUMMARY ================= */}
+        {/* ===================================================
+            SUMMARY
+        =================================================== */}
 
         <div className="card shadow border-0 mb-4">
 
@@ -454,7 +541,9 @@ function StudentResult() {
                     : "badge bg-danger fs-5 px-4 py-2"
                 }
               >
+
                 {status}
+
               </span>
 
             </div>
@@ -543,7 +632,9 @@ function StudentResult() {
         </div>
 
 
-        {/* ================= ANSWER REVIEW ================= */}
+        {/* ===================================================
+            ANSWER REVIEW
+        =================================================== */}
 
         <div className="card shadow border-0">
 
@@ -567,230 +658,365 @@ function StudentResult() {
             ) : (
 
               answers.map(
-                (answer, index) => (
+                (answer, index) => {
 
-                  <div
-                    key={
-                      answer.answerId ||
-                      answer.questionId ||
-                      index
-                    }
-                    className="card border mb-4"
-                  >
-
-                    <div className="card-body">
+                  const testType =
+                    getTestType(answer);
 
 
-                      {/* QUESTION HEADER */}
-
-                      <div className="d-flex justify-content-between align-items-start mb-3">
-
-                        <h5 className="fw-bold mb-0">
-
-                          {index + 1}.{" "}
-
-                          {answer.question}
-
-                        </h5>
+                  const isObjective =
+                    testType === "MCQ" ||
+                    testType === "MSQ";
 
 
-                        <span
-                          className={
-                            answer.correct
-                              ? "badge bg-success ms-3"
-                              : "badge bg-danger ms-3"
-                          }
-                        >
+                  return (
 
-                          {answer.correct
-                            ? "Correct"
-                            : "Incorrect"}
+                    <div
+                      key={
+                        answer.answerId ||
+                        answer.questionId ||
+                        index
+                      }
+                      className="card border mb-4"
+                    >
 
-                        </span>
-
-                      </div>
+                      <div className="card-body">
 
 
-                      {/* DIFFICULTY */}
+                        {/* =================================
+                            QUESTION HEADER
+                        ================================= */}
 
-                      {answer.difficulty && (
+                        <div className="d-flex justify-content-between align-items-start mb-3">
 
-                        <p className="text-muted">
+                          <div>
 
-                          Difficulty:{" "}
+                            <h5 className="fw-bold mb-1">
 
-                          <strong>
-                            {answer.difficulty}
-                          </strong>
+                              {index + 1}.{" "}
 
-                        </p>
+                              {answer.question}
 
-                      )}
-
-
-                      {/* OPTIONS */}
-
-                      {answer.options &&
-                        answer.options.length > 0 && (
-
-                        <div className="mb-4">
-
-                          <h6 className="fw-bold">
-
-                            Options
-
-                          </h6>
+                            </h5>
 
 
-                          {answer.options.map(
-                            (option) => {
+                            {testType && (
 
-                              const isStudentAnswer =
-                                String(
-                                  answer.studentAnswer
-                                    ?? ""
-                                ).trim()
-                                ===
-                                String(
-                                  option.optionText
-                                    ?? ""
-                                ).trim();
+                              <span className="badge bg-secondary">
+
+                                {testType}
+
+                              </span>
+
+                            )}
+
+                          </div>
 
 
-                              return (
-
-                                <div
-                                  key={option.id}
-                                  className={
-                                    "border rounded p-2 mb-2 " +
-                                    (
-                                      option.correct
-                                        ? "border-success bg-success-subtle"
-                                        : isStudentAnswer
-                                          ? "border-danger bg-danger-subtle"
-                                          : ""
-                                    )
-                                  }
-                                >
-
-                                  <span>
-
-                                    {option.optionText}
-
-                                  </span>
-
-
-                                  {isStudentAnswer && (
-
-                                    <span className="badge bg-primary ms-2">
-
-                                      Your Answer
-
-                                    </span>
-
-                                  )}
-
-
-                                  {option.correct && (
-
-                                    <span className="badge bg-success ms-2">
-
-                                      Correct Answer
-
-                                    </span>
-
-                                  )}
-
-                                </div>
-
-                              );
-
+                          <span
+                            className={
+                              answer.correct
+                                ? "badge bg-success ms-3"
+                                : "badge bg-danger ms-3"
                             }
-                          )}
+                          >
+
+                            {answer.correct
+                              ? "Correct"
+                              : "Incorrect"}
+
+                          </span>
 
                         </div>
 
-                      )}
+
+                        {/* =================================
+                            DIFFICULTY
+                        ================================= */}
+
+                        {answer.difficulty && (
+
+                          <p className="text-muted">
+
+                            Difficulty:{" "}
+
+                            <strong>
+                              {answer.difficulty}
+                            </strong>
+
+                          </p>
+
+                        )}
 
 
-                      {/* STUDENT ANSWER */}
+                        {/* =================================
+                            MCQ / MSQ OPTIONS
+                        ================================= */}
 
-                      <div className="mb-3">
+                        {isObjective &&
+                          answer.options &&
+                          answer.options.length > 0 && (
 
-                        <h6 className="fw-bold">
+                          <div className="mb-4">
 
-                          Your Answer
+                            <h6 className="fw-bold mb-3">
 
-                        </h6>
+                              Options
+
+                            </h6>
 
 
-                        <div className="border rounded p-3 bg-light">
+                            {answer.options.map(
+                              (option) => {
 
-                          {answer.studentAnswer
-                            ? answer.studentAnswer
-                            : "No answer submitted"}
+                                const selected =
+                                  isOptionSelected(
+                                    answer.studentAnswer,
+                                    option.id
+                                  );
+
+
+                                const correct =
+                                  Boolean(
+                                    option.correct
+                                  );
+
+
+                                let optionClass =
+                                  "border rounded p-3 mb-2";
+
+
+                                if (
+                                  selected &&
+                                  correct
+                                ) {
+
+                                  optionClass +=
+                                    " border-success bg-success-subtle";
+
+                                } else if (
+                                  selected &&
+                                  !correct
+                                ) {
+
+                                  optionClass +=
+                                    " border-danger bg-danger-subtle";
+
+                                } else if (
+                                  !selected &&
+                                  correct
+                                ) {
+
+                                  optionClass +=
+                                    " border-success bg-success-subtle";
+
+                                }
+
+
+                                return (
+
+                                  <div
+                                    key={option.id}
+                                    className={optionClass}
+                                  >
+
+                                    <div className="d-flex justify-content-between align-items-center">
+
+                                      <span className="fw-semibold">
+
+                                        {option.optionText}
+
+                                      </span>
+
+
+                                      <div className="d-flex gap-2">
+
+                                        {selected && (
+
+                                          <span
+                                            className={
+                                              correct
+                                                ? "badge bg-success"
+                                                : "badge bg-danger"
+                                            }
+                                          >
+
+                                            {correct
+                                              ? "Your Answer ✓"
+                                              : "Your Answer ✗"}
+
+                                          </span>
+
+                                        )}
+
+
+                                        {correct && (
+
+                                          <span className="badge bg-success">
+
+                                            Correct Answer
+
+                                          </span>
+
+                                        )}
+
+                                      </div>
+
+                                    </div>
+
+
+                                  </div>
+
+                                );
+
+                              }
+                            )}
+
+                          </div>
+
+                        )}
+
+
+                        {/* =================================
+                            OBJECTIVE ANSWER SUMMARY
+                        ================================= */}
+
+                        {isObjective && (
+
+                          <div className="mb-3">
+
+                            <h6 className="fw-bold">
+
+                              Your Selected Answer
+
+                            </h6>
+
+
+                            <div
+                              className={
+                                answer.correct
+                                  ? "border border-success rounded p-3 bg-success-subtle"
+                                  : "border border-danger rounded p-3 bg-danger-subtle"
+                              }
+                            >
+
+                              {answer.studentAnswer
+                                ? answer.studentAnswer
+                                : "No answer submitted"}
+
+                            </div>
+
+                          </div>
+
+                        )}
+
+
+                        {/* =================================
+                            THEORETICAL / CODING / LOGICAL
+                        ================================= */}
+
+                        {!isObjective && (
+
+                          <>
+
+                            <div className="mb-3">
+
+                              <h6 className="fw-bold">
+
+                                Your Answer
+
+                              </h6>
+
+
+                              <div
+                                className={
+                                  answer.correct
+                                    ? "border border-success rounded p-3 bg-success-subtle"
+                                    : "border border-danger rounded p-3 bg-danger-subtle"
+                                }
+                                style={{
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word"
+                                }}
+                              >
+
+                                {answer.studentAnswer
+                                  ? answer.studentAnswer
+                                  : "No answer submitted"}
+
+                              </div>
+
+                            </div>
+
+
+                            <div className="mb-3">
+
+                              <h6 className="fw-bold">
+
+                                Correct / Expected Answer
+
+                              </h6>
+
+
+                              <div
+                                className="border border-success rounded p-3 bg-success-subtle"
+                                style={{
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word"
+                                }}
+                              >
+
+                                {answer.correctAnswer
+                                  ? answer.correctAnswer
+                                  : "Not available"}
+
+                              </div>
+
+                            </div>
+
+                          </>
+
+                        )}
+
+
+                        {/* =================================
+                            MARKS
+                        ================================= */}
+
+                        <div className="d-flex justify-content-between align-items-center border-top pt-3">
+
+                          <span className="fw-bold">
+
+                            Marks
+
+                          </span>
+
+
+                          <span
+                            className={
+                              answer.correct
+                                ? "text-success fw-bold fs-5"
+                                : "text-danger fw-bold fs-5"
+                            }
+                          >
+
+                            {answer.marks}
+
+                            {" / "}
+
+                            {answer.maxMarks}
+
+                          </span>
 
                         </div>
-
-                      </div>
-
-
-                      {/* CORRECT ANSWER */}
-
-                      <div className="mb-3">
-
-                        <h6 className="fw-bold">
-
-                          Correct Answer
-
-                        </h6>
-
-
-                        <div className="border rounded p-3 bg-light">
-
-                          {answer.correctAnswer
-                            ? answer.correctAnswer
-                            : "Not available"}
-
-                        </div>
-
-                      </div>
-
-
-                      {/* MARKS */}
-
-                      <div className="d-flex justify-content-between align-items-center">
-
-                        <span className="fw-bold">
-
-                          Marks
-
-                        </span>
-
-
-                        <span
-                          className={
-                            answer.correct
-                              ? "text-success fw-bold"
-                              : "text-danger fw-bold"
-                          }
-                        >
-
-                          {answer.marks}
-
-                          {" / "}
-
-                          {answer.maxMarks}
-
-                        </span>
 
                       </div>
 
                     </div>
 
-                  </div>
+                  );
 
-                )
+                }
               )
 
             )}
@@ -800,7 +1026,9 @@ function StudentResult() {
         </div>
 
 
-        {/* ================= BACK ================= */}
+        {/* ===================================================
+            BACK BUTTON
+        =================================================== */}
 
         <div className="text-center mt-4">
 
@@ -830,3 +1058,4 @@ function StudentResult() {
 
 
 export default StudentResult;
+

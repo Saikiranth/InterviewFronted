@@ -1,4 +1,3 @@
-
 import { useEffect, useRef, useState } from "react";
 import {
   useNavigate,
@@ -26,6 +25,17 @@ function StudentTest() {
   const [loading, setLoading] = useState(true);
 
   const [submitting, setSubmitting] = useState(false);
+
+
+  // =========================================================
+  // ATTEMPT STATE
+  // =========================================================
+
+  const [attemptId, setAttemptId] = useState(null);
+
+  // Ref is important because browser event listeners
+  // can otherwise use an old attemptId value.
+  const attemptIdRef = useRef(null);
 
 
   // =========================================================
@@ -75,6 +85,12 @@ function StudentTest() {
 
   // Prevent multiple automatic submissions
   const autoSubmittingRef = useRef(false);
+
+  // Prevent violation during intentional cleanup
+  const isSubmittingRef = useRef(false);
+
+  // Prevent blur + visibilitychange duplicate violation
+  const lastFocusViolationRef = useRef(0);
 
 
   // =========================================================
@@ -236,9 +252,16 @@ function StudentTest() {
 
               setCameraReady(false);
 
-              registerViolation(
-                "Camera access was stopped"
-              );
+              if (
+                proctoringStarted &&
+                !isSubmittingRef.current
+              ) {
+
+                registerViolation(
+                  "Camera access was stopped"
+                );
+
+              }
 
               setProctoringError(
                 "Camera access was stopped. Please enable your camera again."
@@ -258,9 +281,16 @@ function StudentTest() {
 
               setMicrophoneReady(false);
 
-              registerViolation(
-                "Microphone access was stopped"
-              );
+              if (
+                proctoringStarted &&
+                !isSubmittingRef.current
+              ) {
+
+                registerViolation(
+                  "Microphone access was stopped"
+                );
+
+              }
 
               setProctoringError(
                 "Microphone access was stopped."
@@ -355,9 +385,16 @@ function StudentTest() {
 
             setScreenReady(false);
 
-            registerViolation(
-              "Screen sharing was stopped"
-            );
+            if (
+              proctoringStarted &&
+              !isSubmittingRef.current
+            ) {
+
+              registerViolation(
+                "Screen sharing was stopped"
+              );
+
+            }
 
             setProctoringError(
               "Screen sharing was stopped. Please start screen sharing again."
@@ -439,9 +476,32 @@ function StudentTest() {
   // REGISTER VIOLATION
   // =========================================================
 
-  const registerViolation = (reason) => {
+  const registerViolation = async (reason) => {
 
     if (!proctoringStarted) {
+
+      return;
+
+    }
+
+
+    if (isSubmittingRef.current) {
+
+      return;
+
+    }
+
+
+    const currentAttemptId =
+      attemptIdRef.current;
+
+
+    if (!currentAttemptId) {
+
+      console.warn(
+        "Violation detected but attempt ID is not available:",
+        reason
+      );
 
       return;
 
@@ -454,7 +514,9 @@ function StudentTest() {
 
     const violation = {
 
-      id: Date.now(),
+      id:
+        Date.now() +
+        Math.random(),
 
       reason,
 
@@ -462,6 +524,10 @@ function StudentTest() {
 
     };
 
+
+    // =========================================
+    // UPDATE LOCAL VIOLATION HISTORY
+    // =========================================
 
     setViolations(
       (previous) => [
@@ -471,16 +537,13 @@ function StudentTest() {
     );
 
 
+    // =========================================
+    // UPDATE LOCAL VIOLATION COUNT
+    // =========================================
+
     setViolationCount(
-      (previous) => {
-
-        const newCount =
-          previous + 1;
-
-
-        return newCount;
-
-      }
+      (previous) =>
+        previous + 1
     );
 
 
@@ -492,10 +555,52 @@ function StudentTest() {
     );
 
 
-    // Warning
     setProctoringError(
       `⚠️ Violation detected: ${reason}`
     );
+
+
+    // =========================================
+    // SAVE VIOLATION TO BACKEND
+    // =========================================
+
+    try {
+
+      await api.post(
+        `/api/proctoring/violation/${currentAttemptId}`,
+        {
+          violationType: reason,
+          description: reason
+        },
+        {
+          headers: {
+            Authorization:
+              `Bearer ${token}`,
+
+            "Content-Type":
+              "application/json"
+          }
+        }
+      );
+
+
+      console.log(
+        "Violation saved successfully:",
+        reason
+      );
+
+
+    } catch (error) {
+
+      console.error(
+        "Failed to save proctoring violation:",
+        error
+      );
+
+      // Do NOT remove the local violation.
+      // The test can continue even if logging fails.
+
+    }
 
   };
 
@@ -571,11 +676,31 @@ function StudentTest() {
     const handleVisibilityChange =
       () => {
 
-        if (document.hidden) {
+        if (
+          document.hidden &&
+          !isSubmittingRef.current
+        ) {
 
-          registerViolation(
-            "Browser tab/window was switched"
-          );
+          const now =
+            Date.now();
+
+
+          // Prevent duplicate event with window blur.
+          if (
+            now -
+              lastFocusViolationRef.current >
+            1000
+          ) {
+
+            lastFocusViolationRef.current =
+              now;
+
+
+            registerViolation(
+              "Browser tab/window was switched"
+            );
+
+          }
 
         }
 
@@ -584,9 +709,36 @@ function StudentTest() {
 
     const handleBlur = () => {
 
-      registerViolation(
-        "Test window lost focus"
-      );
+      if (
+        isSubmittingRef.current
+      ) {
+
+        return;
+
+      }
+
+
+      const now =
+        Date.now();
+
+
+      // blur and visibilitychange can both fire
+      // for the same tab switch.
+      if (
+        now -
+          lastFocusViolationRef.current >
+        1000
+      ) {
+
+        lastFocusViolationRef.current =
+          now;
+
+
+        registerViolation(
+          "Test window lost focus"
+        );
+
+      }
 
     };
 
@@ -637,7 +789,9 @@ function StudentTest() {
     const handleFullscreenChange =
       () => {
 
-        if (document.fullscreenElement) {
+        if (
+          document.fullscreenElement
+        ) {
 
           setFullscreenReady(true);
 
@@ -646,9 +800,15 @@ function StudentTest() {
           setFullscreenReady(false);
 
 
-          registerViolation(
-            "Fullscreen mode was exited"
-          );
+          if (
+            !isSubmittingRef.current
+          ) {
+
+            registerViolation(
+              "Fullscreen mode was exited"
+            );
+
+          }
 
         }
 
@@ -1161,6 +1321,10 @@ function StudentTest() {
       }
 
 
+      // =========================================
+      // FULLSCREEN
+      // =========================================
+
       if (!document.fullscreenElement) {
 
         try {
@@ -1168,6 +1332,11 @@ function StudentTest() {
           await document.documentElement.requestFullscreen();
 
         } catch (error) {
+
+          console.error(
+            "Fullscreen error:",
+            error
+          );
 
           setProctoringError(
             "Please allow fullscreen mode before starting the test."
@@ -1182,7 +1351,123 @@ function StudentTest() {
 
       setFullscreenReady(true);
 
-      setProctoringStarted(true);
+
+      // =========================================
+      // CREATE / RESUME TEST ATTEMPT
+      // =========================================
+
+      try {
+
+        console.log(
+          "Starting test attempt..."
+        );
+
+
+        const response =
+          await api.post(
+            `/api/tests/${testId}/start`,
+            {},
+            {
+              headers: {
+                Authorization:
+                  `Bearer ${token}`,
+
+                "Content-Type":
+                  "application/json"
+              }
+            }
+          );
+
+
+        console.log(
+          "Start attempt response:",
+          response.data
+        );
+
+
+        const newAttemptId =
+          response.data.attemptId;
+
+
+        if (!newAttemptId) {
+
+          setProctoringError(
+            "Unable to create test attempt."
+          );
+
+          return;
+
+        }
+
+
+        // Save in state
+        setAttemptId(newAttemptId);
+
+
+        // Save in ref for event listeners
+        attemptIdRef.current =
+          newAttemptId;
+
+
+        console.log(
+          "Attempt ID:",
+          newAttemptId
+        );
+
+
+        // =========================================
+        // START MONITORING ONLY AFTER ATTEMPT EXISTS
+        // =========================================
+
+        setProctoringStarted(true);
+
+
+      } catch (error) {
+
+        console.error(
+          "Failed to start test attempt:",
+          error
+        );
+
+
+        if (
+          error.response?.status === 401
+        ) {
+
+          alert(
+            "Session expired. Please login again."
+          );
+
+          localStorage.removeItem("token");
+
+          localStorage.removeItem("role");
+
+          navigate("/login");
+
+          return;
+
+        }
+
+
+        if (
+          error.response?.status === 403
+        ) {
+
+          setProctoringError(
+            "You are not allowed to start this test."
+          );
+
+          return;
+
+        }
+
+
+        setProctoringError(
+          error.response?.data ||
+          "Unable to start the test. Please try again."
+        );
+
+      }
 
     };
 
@@ -1199,7 +1484,13 @@ function StudentTest() {
         cameraStreamRef.current
           .getTracks()
           .forEach(
-            (track) => track.stop()
+            (track) => {
+
+              track.onended = null;
+
+              track.stop();
+
+            }
           );
 
         cameraStreamRef.current = null;
@@ -1212,7 +1503,13 @@ function StudentTest() {
         screenStreamRef.current
           .getTracks()
           .forEach(
-            (track) => track.stop()
+            (track) => {
+
+              track.onended = null;
+
+              track.stop();
+
+            }
           );
 
         screenStreamRef.current = null;
@@ -1229,6 +1526,8 @@ function StudentTest() {
   useEffect(() => {
 
     return () => {
+
+      isSubmittingRef.current = true;
 
       stopMediaStreams();
 
@@ -1358,6 +1657,19 @@ function StudentTest() {
     }
 
 
+    if (
+      !attemptIdRef.current
+    ) {
+
+      alert(
+        "Test attempt was not started. Please start the test first."
+      );
+
+      return;
+
+    }
+
+
     // -----------------------------------------
     // CHECK UNANSWERED QUESTIONS
     // -----------------------------------------
@@ -1415,8 +1727,11 @@ function StudentTest() {
 
 
     // -----------------------------------------
-    // SUBMIT
+    // MARK AS SUBMITTING
     // -----------------------------------------
+
+    isSubmittingRef.current = true;
+
 
     try {
 
@@ -1551,11 +1866,12 @@ function StudentTest() {
       // GET ATTEMPT ID
       // =========================================
 
-      const attemptId =
-        response.data.attemptId;
+      const submittedAttemptId =
+        response.data.attemptId ||
+        attemptIdRef.current;
 
 
-      if (!attemptId) {
+      if (!submittedAttemptId) {
 
         alert(
           "Test submitted, but attempt ID was not returned."
@@ -1571,7 +1887,7 @@ function StudentTest() {
       // =========================================
 
       navigate(
-        `/student/result/${attemptId}`
+        `/student/result/${submittedAttemptId}`
       );
 
 
@@ -2619,9 +2935,7 @@ function StudentTest() {
                 </p>
 
 
-                {/* =========================
-                    THEORETICAL
-                ========================= */}
+                {/* THEORETICAL */}
 
                 {test.testType ===
                   "THEORETICAL" && (
@@ -2654,9 +2968,7 @@ function StudentTest() {
                 )}
 
 
-                {/* =========================
-                    LOGICAL CODING
-                ========================= */}
+                {/* LOGICAL CODING */}
 
                 {test.testType ===
                   "LOGICAL_CODING" && (
@@ -2690,9 +3002,7 @@ function StudentTest() {
                 )}
 
 
-                {/* =========================
-                    MCQ
-                ========================= */}
+                {/* MCQ */}
 
                 {test.testType ===
                   "MCQ" && (
@@ -2765,9 +3075,7 @@ function StudentTest() {
                 )}
 
 
-                {/* =========================
-                    MSQ
-                ========================= */}
+                {/* MSQ */}
 
                 {test.testType ===
                   "MSQ" && (
@@ -2853,9 +3161,7 @@ function StudentTest() {
         )}
 
 
-        {/* =========================
-            SUBMIT BUTTON
-        ========================= */}
+        {/* SUBMIT BUTTON */}
 
         {test.questions.length > 0 && (
 
@@ -2894,4 +3200,3 @@ function StudentTest() {
 
 
 export default StudentTest;
-

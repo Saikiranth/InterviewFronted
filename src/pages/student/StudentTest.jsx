@@ -1,4 +1,9 @@
-import { useEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useRef,
+  useState
+} from "react";
+
 import {
   useNavigate,
   useParams
@@ -33,9 +38,22 @@ function StudentTest() {
 
   const [attemptId, setAttemptId] = useState(null);
 
-  // Ref is important because browser event listeners
-  // can otherwise use an old attemptId value.
   const attemptIdRef = useRef(null);
+
+
+  // =========================================================
+  // TIMER STATE
+  // =========================================================
+
+  const [expiresAt, setExpiresAt] =
+    useState(null);
+
+  const [timeLeft, setTimeLeft] =
+    useState(null);
+
+  const timerRef = useRef(null);
+
+  const timerExpiredRef = useRef(false);
 
 
   // =========================================================
@@ -68,7 +86,7 @@ function StudentTest() {
 
 
   // =========================================================
-  // CHEATING / VIOLATION STATE
+  // VIOLATION STATE
   // =========================================================
 
   const [violations, setViolations] =
@@ -83,25 +101,27 @@ function StudentTest() {
   const MAX_VIOLATIONS = 5;
 
 
-  // Prevent multiple automatic submissions
-  const autoSubmittingRef = useRef(false);
-
-  // Prevent violation during intentional cleanup
-  const isSubmittingRef = useRef(false);
-
-  // Prevent blur + visibilitychange duplicate violation
-  const lastFocusViolationRef = useRef(0);
-
-
   // =========================================================
-  // MEDIA REFERENCES
+  // REFS
   // =========================================================
 
-  const cameraStreamRef = useRef(null);
+  const autoSubmittingRef =
+    useRef(false);
 
-  const screenStreamRef = useRef(null);
+  const isSubmittingRef =
+    useRef(false);
 
-  const videoRef = useRef(null);
+  const lastFocusViolationRef =
+    useRef(0);
+
+  const cameraStreamRef =
+    useRef(null);
+
+  const screenStreamRef =
+    useRef(null);
+
+  const videoRef =
+    useRef(null);
 
 
   // =========================================================
@@ -129,7 +149,6 @@ function StudentTest() {
 
       setLoading(true);
 
-
       if (!token) {
 
         alert(
@@ -141,10 +160,9 @@ function StudentTest() {
         return;
       }
 
-
       const response =
         await api.get(
-          `/api/tests/${testId}`,
+          `/api/student/tests/${testId}`,
           {
             headers: {
               Authorization:
@@ -153,15 +171,12 @@ function StudentTest() {
           }
         );
 
-
       console.log(
         "Test response:",
         response.data
       );
 
-
       setTest(response.data);
-
 
     } catch (error) {
 
@@ -170,18 +185,16 @@ function StudentTest() {
         error
       );
 
-
       if (
         error.response?.status === 401 ||
         error.response?.status === 403
       ) {
 
         alert(
-          "Session expired. Please login again."
+          "You are not allowed to access this test."
         );
 
         localStorage.removeItem("token");
-
         localStorage.removeItem("role");
 
         navigate("/login");
@@ -189,9 +202,9 @@ function StudentTest() {
       } else {
 
         alert(
+          error.response?.data ||
           "Failed to load test."
         );
-
       }
 
     } finally {
@@ -199,8 +212,127 @@ function StudentTest() {
       setLoading(false);
 
     }
-
   };
+
+
+  // =========================================================
+  // FORMAT TIMER
+  // =========================================================
+
+  const formatTime = (seconds) => {
+
+    if (
+      seconds === null ||
+      seconds < 0
+    ) {
+
+      return "00:00";
+    }
+
+    const minutes =
+      Math.floor(seconds / 60);
+
+    const remainingSeconds =
+      seconds % 60;
+
+    return (
+      String(minutes).padStart(2, "0") +
+      ":" +
+      String(remainingSeconds).padStart(2, "0")
+    );
+  };
+
+
+  // =========================================================
+  // START TIMER
+  // =========================================================
+
+  const startTimer = (expiryTime) => {
+
+    if (!expiryTime) {
+      return;
+    }
+
+    setExpiresAt(expiryTime);
+
+    timerExpiredRef.current = false;
+
+    if (timerRef.current) {
+
+      clearInterval(
+        timerRef.current
+      );
+    }
+
+    const calculateRemaining = () => {
+
+      const expiry =
+        new Date(expiryTime).getTime();
+
+      const now =
+        Date.now();
+
+      const remaining =
+        Math.max(
+          0,
+          Math.floor(
+            (expiry - now) / 1000
+          )
+        );
+
+      setTimeLeft(remaining);
+
+      if (remaining <= 0) {
+
+        clearInterval(
+          timerRef.current
+        );
+
+        if (
+          !timerExpiredRef.current &&
+          !isSubmittingRef.current
+        ) {
+
+          timerExpiredRef.current = true;
+
+          alert(
+            "⏰ Time is over. Your test will be submitted automatically."
+          );
+
+          handleSubmit(true);
+        }
+      }
+    };
+
+    calculateRemaining();
+
+    timerRef.current =
+      setInterval(
+        calculateRemaining,
+        1000
+      );
+  };
+
+
+  // =========================================================
+  // TIMER CLEANUP
+  // =========================================================
+
+  useEffect(() => {
+
+    return () => {
+
+      if (timerRef.current) {
+
+        clearInterval(
+          timerRef.current
+        );
+
+      }
+
+    };
+
+  }, []);
 
 
   // =========================================================
@@ -222,9 +354,8 @@ function StudentTest() {
             }
           );
 
-
-        cameraStreamRef.current = stream;
-
+        cameraStreamRef.current =
+          stream;
 
         if (videoRef.current) {
 
@@ -233,20 +364,13 @@ function StudentTest() {
 
         }
 
-
         setCameraReady(true);
 
         setMicrophoneReady(true);
 
-
-        console.log(
-          "Camera and microphone access granted."
-        );
-
-
-        // Camera stopped
-        stream.getVideoTracks().forEach(
-          (track) => {
+        stream
+          .getVideoTracks()
+          .forEach((track) => {
 
             track.onended = () => {
 
@@ -260,22 +384,18 @@ function StudentTest() {
                 registerViolation(
                   "Camera access was stopped"
                 );
-
               }
 
               setProctoringError(
                 "Camera access was stopped. Please enable your camera again."
               );
-
             };
 
-          }
-        );
+          });
 
-
-        // Microphone stopped
-        stream.getAudioTracks().forEach(
-          (track) => {
+        stream
+          .getAudioTracks()
+          .forEach((track) => {
 
             track.onended = () => {
 
@@ -289,18 +409,14 @@ function StudentTest() {
                 registerViolation(
                   "Microphone access was stopped"
                 );
-
               }
 
               setProctoringError(
                 "Microphone access was stopped."
               );
-
             };
 
-          }
-        );
-
+          });
 
       } catch (error) {
 
@@ -309,14 +425,13 @@ function StudentTest() {
           error
         );
 
-
         setCameraReady(false);
 
         setMicrophoneReady(false);
 
-
         if (
-          error.name === "NotAllowedError"
+          error.name ===
+          "NotAllowedError"
         ) {
 
           setCameraError(
@@ -324,7 +439,8 @@ function StudentTest() {
           );
 
         } else if (
-          error.name === "NotFoundError"
+          error.name ===
+          "NotFoundError"
         ) {
 
           setCameraError(
@@ -336,16 +452,13 @@ function StudentTest() {
           setCameraError(
             "Unable to access camera and microphone."
           );
-
         }
-
       }
-
     };
 
 
   // =========================================================
-  // SCREEN SHARING
+  // SCREEN SHARE
   // =========================================================
 
   const requestScreenShare =
@@ -363,21 +476,13 @@ function StudentTest() {
             }
           );
 
-
-        screenStreamRef.current = stream;
-
+        screenStreamRef.current =
+          stream;
 
         setScreenReady(true);
 
-
-        console.log(
-          "Screen sharing started."
-        );
-
-
         const videoTrack =
           stream.getVideoTracks()[0];
-
 
         if (videoTrack) {
 
@@ -393,17 +498,13 @@ function StudentTest() {
               registerViolation(
                 "Screen sharing was stopped"
               );
-
             }
 
             setProctoringError(
               "Screen sharing was stopped. Please start screen sharing again."
             );
-
           };
-
         }
-
 
       } catch (error) {
 
@@ -412,12 +513,11 @@ function StudentTest() {
           error
         );
 
-
         setScreenReady(false);
 
-
         if (
-          error.name === "NotAllowedError"
+          error.name ===
+          "NotAllowedError"
         ) {
 
           setScreenError(
@@ -429,11 +529,8 @@ function StudentTest() {
           setScreenError(
             "Unable to start screen sharing."
           );
-
         }
-
       }
-
     };
 
 
@@ -466,9 +563,7 @@ function StudentTest() {
         setProctoringError(
           "Unable to enter fullscreen mode."
         );
-
       }
-
     };
 
 
@@ -476,137 +571,87 @@ function StudentTest() {
   // REGISTER VIOLATION
   // =========================================================
 
-  const registerViolation = async (reason) => {
+  const registerViolation =
+    async (reason) => {
 
-    if (!proctoringStarted) {
+      if (!proctoringStarted) {
+        return;
+      }
 
-      return;
+      if (isSubmittingRef.current) {
+        return;
+      }
 
-    }
+      const currentAttemptId =
+        attemptIdRef.current;
 
+      if (!currentAttemptId) {
+        return;
+      }
 
-    if (isSubmittingRef.current) {
+      const timestamp =
+        new Date().toLocaleTimeString();
 
-      return;
+      const violation = {
 
-    }
+        id:
+          Date.now() +
+          Math.random(),
 
+        reason,
 
-    const currentAttemptId =
-      attemptIdRef.current;
+        timestamp
+      };
 
-
-    if (!currentAttemptId) {
-
-      console.warn(
-        "Violation detected but attempt ID is not available:",
-        reason
+      setViolations(
+        (previous) => [
+          ...previous,
+          violation
+        ]
       );
 
-      return;
+      setViolationCount(
+        (previous) =>
+          previous + 1
+      );
 
-    }
+      setLastViolation(reason);
 
+      setProctoringError(
+        `⚠️ Violation detected: ${reason}`
+      );
 
-    const timestamp =
-      new Date().toLocaleTimeString();
+      try {
 
+        await api.post(
+          `/api/proctoring/violation/${currentAttemptId}`,
+          {
+            violationType: reason,
+            description: reason
+          },
+          {
+            headers: {
+              Authorization:
+                `Bearer ${token}`,
 
-    const violation = {
+              "Content-Type":
+                "application/json"
+            }
+          }
+        );
 
-      id:
-        Date.now() +
-        Math.random(),
+      } catch (error) {
 
-      reason,
-
-      timestamp
-
+        console.error(
+          "Failed to save violation:",
+          error
+        );
+      }
     };
 
 
-    // =========================================
-    // UPDATE LOCAL VIOLATION HISTORY
-    // =========================================
-
-    setViolations(
-      (previous) => [
-        ...previous,
-        violation
-      ]
-    );
-
-
-    // =========================================
-    // UPDATE LOCAL VIOLATION COUNT
-    // =========================================
-
-    setViolationCount(
-      (previous) =>
-        previous + 1
-    );
-
-
-    setLastViolation(reason);
-
-
-    console.warn(
-      `PROCTORING VIOLATION: ${reason}`
-    );
-
-
-    setProctoringError(
-      `⚠️ Violation detected: ${reason}`
-    );
-
-
-    // =========================================
-    // SAVE VIOLATION TO BACKEND
-    // =========================================
-
-    try {
-
-      await api.post(
-        `/api/proctoring/violation/${currentAttemptId}`,
-        {
-          violationType: reason,
-          description: reason
-        },
-        {
-          headers: {
-            Authorization:
-              `Bearer ${token}`,
-
-            "Content-Type":
-              "application/json"
-          }
-        }
-      );
-
-
-      console.log(
-        "Violation saved successfully:",
-        reason
-      );
-
-
-    } catch (error) {
-
-      console.error(
-        "Failed to save proctoring violation:",
-        error
-      );
-
-      // Do NOT remove the local violation.
-      // The test can continue even if logging fails.
-
-    }
-
-  };
-
-
   // =========================================================
-  // AUTOMATIC SUBMISSION
+  // VIOLATION LIMIT
   // =========================================================
 
   const checkViolationLimit =
@@ -618,8 +663,8 @@ function StudentTest() {
         !submitting
       ) {
 
-        autoSubmittingRef.current = true;
-
+        autoSubmittingRef.current =
+          true;
 
         setTimeout(() => {
 
@@ -627,28 +672,18 @@ function StudentTest() {
             "Maximum number of proctoring violations reached. Your test will be submitted automatically."
           );
 
-
           handleSubmit(true);
 
         }, 500);
-
       }
-
     };
 
-
-  // =========================================================
-  // WATCH VIOLATION COUNT
-  // =========================================================
 
   useEffect(() => {
 
     if (!proctoringStarted) {
-
       return;
-
     }
-
 
     checkViolationLimit(
       violationCount
@@ -661,17 +696,14 @@ function StudentTest() {
 
 
   // =========================================================
-  // TAB SWITCH / WINDOW BLUR DETECTION
+  // TAB SWITCH
   // =========================================================
 
   useEffect(() => {
 
     if (!proctoringStarted) {
-
       return;
-
     }
-
 
     const handleVisibilityChange =
       () => {
@@ -684,26 +716,20 @@ function StudentTest() {
           const now =
             Date.now();
 
-
-          // Prevent duplicate event with window blur.
           if (
             now -
-              lastFocusViolationRef.current >
+            lastFocusViolationRef.current >
             1000
           ) {
 
             lastFocusViolationRef.current =
               now;
 
-
             registerViolation(
               "Browser tab/window was switched"
             );
-
           }
-
         }
-
       };
 
 
@@ -712,34 +738,25 @@ function StudentTest() {
       if (
         isSubmittingRef.current
       ) {
-
         return;
-
       }
-
 
       const now =
         Date.now();
 
-
-      // blur and visibilitychange can both fire
-      // for the same tab switch.
       if (
         now -
-          lastFocusViolationRef.current >
+        lastFocusViolationRef.current >
         1000
       ) {
 
         lastFocusViolationRef.current =
           now;
 
-
         registerViolation(
           "Test window lost focus"
         );
-
       }
-
     };
 
 
@@ -747,7 +764,6 @@ function StudentTest() {
       "visibilitychange",
       handleVisibilityChange
     );
-
 
     window.addEventListener(
       "blur",
@@ -762,29 +778,24 @@ function StudentTest() {
         handleVisibilityChange
       );
 
-
       window.removeEventListener(
         "blur",
         handleBlur
       );
-
     };
 
   }, [proctoringStarted]);
 
 
   // =========================================================
-  // FULLSCREEN EXIT DETECTION
+  // FULLSCREEN DETECTION
   // =========================================================
 
   useEffect(() => {
 
     if (!proctoringStarted) {
-
       return;
-
     }
-
 
     const handleFullscreenChange =
       () => {
@@ -799,7 +810,6 @@ function StudentTest() {
 
           setFullscreenReady(false);
 
-
           if (
             !isSubmittingRef.current
           ) {
@@ -807,11 +817,8 @@ function StudentTest() {
             registerViolation(
               "Fullscreen mode was exited"
             );
-
           }
-
         }
-
       };
 
 
@@ -834,27 +841,24 @@ function StudentTest() {
 
 
   // =========================================================
-  // COPY DETECTION
+  // COPY
   // =========================================================
 
   useEffect(() => {
 
     if (!proctoringStarted) {
-
       return;
-
     }
 
+    const handleCopy =
+      (event) => {
 
-    const handleCopy = (event) => {
+        event.preventDefault();
 
-      event.preventDefault();
-
-      registerViolation(
-        "Copy operation was attempted"
-      );
-
-    };
+        registerViolation(
+          "Copy operation was attempted"
+        );
+      };
 
 
     document.addEventListener(
@@ -876,27 +880,24 @@ function StudentTest() {
 
 
   // =========================================================
-  // PASTE DETECTION
+  // PASTE
   // =========================================================
 
   useEffect(() => {
 
     if (!proctoringStarted) {
-
       return;
-
     }
 
+    const handlePaste =
+      (event) => {
 
-    const handlePaste = (event) => {
+        event.preventDefault();
 
-      event.preventDefault();
-
-      registerViolation(
-        "Paste operation was attempted"
-      );
-
-    };
+        registerViolation(
+          "Paste operation was attempted"
+        );
+      };
 
 
     document.addEventListener(
@@ -918,27 +919,24 @@ function StudentTest() {
 
 
   // =========================================================
-  // CUT DETECTION
+  // CUT
   // =========================================================
 
   useEffect(() => {
 
     if (!proctoringStarted) {
-
       return;
-
     }
 
+    const handleCut =
+      (event) => {
 
-    const handleCut = (event) => {
+        event.preventDefault();
 
-      event.preventDefault();
-
-      registerViolation(
-        "Cut operation was attempted"
-      );
-
-    };
+        registerViolation(
+          "Cut operation was attempted"
+        );
+      };
 
 
     document.addEventListener(
@@ -960,27 +958,24 @@ function StudentTest() {
 
 
   // =========================================================
-  // RIGHT CLICK DETECTION
+  // RIGHT CLICK
   // =========================================================
 
   useEffect(() => {
 
     if (!proctoringStarted) {
-
       return;
-
     }
 
+    const handleContextMenu =
+      (event) => {
 
-    const handleContextMenu = (event) => {
+        event.preventDefault();
 
-      event.preventDefault();
-
-      registerViolation(
-        "Right-click was attempted"
-      );
-
-    };
+        registerViolation(
+          "Right-click was attempted"
+        );
+      };
 
 
     document.addEventListener(
@@ -1002,138 +997,121 @@ function StudentTest() {
 
 
   // =========================================================
-  // KEYBOARD SHORTCUT DETECTION
+  // KEYBOARD SHORTCUTS
   // =========================================================
 
   useEffect(() => {
 
     if (!proctoringStarted) {
-
       return;
-
     }
 
+    const handleKeyDown =
+      (event) => {
 
-    const handleKeyDown = (event) => {
+        if (event.key === "F12") {
 
-      // F12
-      if (event.key === "F12") {
+          event.preventDefault();
 
-        event.preventDefault();
+          registerViolation(
+            "Developer tools shortcut F12 was attempted"
+          );
 
-        registerViolation(
-          "Developer tools shortcut F12 was attempted"
-        );
-
-        return;
-
-      }
+          return;
+        }
 
 
-      // Ctrl + Shift + I
-      if (
-        event.ctrlKey &&
-        event.shiftKey &&
-        event.key.toLowerCase() === "i"
-      ) {
+        if (
+          event.ctrlKey &&
+          event.shiftKey &&
+          event.key.toLowerCase() === "i"
+        ) {
 
-        event.preventDefault();
+          event.preventDefault();
 
-        registerViolation(
-          "Developer tools shortcut Ctrl+Shift+I was attempted"
-        );
+          registerViolation(
+            "Developer tools shortcut Ctrl+Shift+I was attempted"
+          );
 
-        return;
-
-      }
+          return;
+        }
 
 
-      // Ctrl + Shift + J
-      if (
-        event.ctrlKey &&
-        event.shiftKey &&
-        event.key.toLowerCase() === "j"
-      ) {
+        if (
+          event.ctrlKey &&
+          event.shiftKey &&
+          event.key.toLowerCase() === "j"
+        ) {
 
-        event.preventDefault();
+          event.preventDefault();
 
-        registerViolation(
-          "Developer tools shortcut Ctrl+Shift+J was attempted"
-        );
+          registerViolation(
+            "Developer tools shortcut Ctrl+Shift+J was attempted"
+          );
 
-        return;
-
-      }
+          return;
+        }
 
 
-      // Ctrl + U
-      if (
-        event.ctrlKey &&
-        event.key.toLowerCase() === "u"
-      ) {
+        if (
+          event.ctrlKey &&
+          event.key.toLowerCase() === "u"
+        ) {
 
-        event.preventDefault();
+          event.preventDefault();
 
-        registerViolation(
-          "View-source shortcut Ctrl+U was attempted"
-        );
+          registerViolation(
+            "View-source shortcut Ctrl+U was attempted"
+          );
 
-        return;
-
-      }
+          return;
+        }
 
 
-      // Ctrl + C
-      if (
-        event.ctrlKey &&
-        event.key.toLowerCase() === "c"
-      ) {
+        if (
+          event.ctrlKey &&
+          event.key.toLowerCase() === "c"
+        ) {
 
-        event.preventDefault();
+          event.preventDefault();
 
-        registerViolation(
-          "Copy shortcut Ctrl+C was attempted"
-        );
+          registerViolation(
+            "Copy shortcut Ctrl+C was attempted"
+          );
 
-        return;
-
-      }
+          return;
+        }
 
 
-      // Ctrl + V
-      if (
-        event.ctrlKey &&
-        event.key.toLowerCase() === "v"
-      ) {
+        if (
+          event.ctrlKey &&
+          event.key.toLowerCase() === "v"
+        ) {
 
-        event.preventDefault();
+          event.preventDefault();
 
-        registerViolation(
-          "Paste shortcut Ctrl+V was attempted"
-        );
+          registerViolation(
+            "Paste shortcut Ctrl+V was attempted"
+          );
 
-        return;
-
-      }
+          return;
+        }
 
 
-      // Ctrl + X
-      if (
-        event.ctrlKey &&
-        event.key.toLowerCase() === "x"
-      ) {
+        if (
+          event.ctrlKey &&
+          event.key.toLowerCase() === "x"
+        ) {
 
-        event.preventDefault();
+          event.preventDefault();
 
-        registerViolation(
-          "Cut shortcut Ctrl+X was attempted"
-        );
+          registerViolation(
+            "Cut shortcut Ctrl+X was attempted"
+          );
 
-        return;
-
-      }
-
-    };
+          return;
+        }
+      };
 
 
     document.addEventListener(
@@ -1155,17 +1133,14 @@ function StudentTest() {
 
 
   // =========================================================
-  // CAMERA TRACK MONITORING
+  // CAMERA MONITOR
   // =========================================================
 
   useEffect(() => {
 
     if (!proctoringStarted) {
-
       return;
-
     }
-
 
     const checkCamera =
       setInterval(() => {
@@ -1173,17 +1148,12 @@ function StudentTest() {
         const stream =
           cameraStreamRef.current;
 
-
         if (!stream) {
-
           return;
-
         }
-
 
         const videoTracks =
           stream.getVideoTracks();
-
 
         const audioTracks =
           stream.getAudioTracks();
@@ -1192,22 +1162,22 @@ function StudentTest() {
         if (
           videoTracks.length === 0 ||
           !videoTracks[0].enabled ||
-          videoTracks[0].readyState === "ended"
+          videoTracks[0].readyState ===
+            "ended"
         ) {
 
           setCameraReady(false);
-
         }
 
 
         if (
           audioTracks.length === 0 ||
           !audioTracks[0].enabled ||
-          audioTracks[0].readyState === "ended"
+          audioTracks[0].readyState ===
+            "ended"
         ) {
 
           setMicrophoneReady(false);
-
         }
 
       }, 2000);
@@ -1225,17 +1195,14 @@ function StudentTest() {
 
 
   // =========================================================
-  // SCREEN SHARE MONITORING
+  // SCREEN MONITOR
   // =========================================================
 
   useEffect(() => {
 
     if (!proctoringStarted) {
-
       return;
-
     }
-
 
     const checkScreenShare =
       setInterval(() => {
@@ -1243,25 +1210,20 @@ function StudentTest() {
         const stream =
           screenStreamRef.current;
 
-
         if (!stream) {
-
           return;
-
         }
-
 
         const tracks =
           stream.getVideoTracks();
 
-
         if (
           tracks.length === 0 ||
-          tracks[0].readyState === "ended"
+          tracks[0].readyState ===
+            "ended"
         ) {
 
           setScreenReady(false);
-
         }
 
       }, 2000);
@@ -1287,7 +1249,6 @@ function StudentTest() {
 
       setProctoringError("");
 
-
       if (!cameraReady) {
 
         setProctoringError(
@@ -1295,7 +1256,6 @@ function StudentTest() {
         );
 
         return;
-
       }
 
 
@@ -1306,7 +1266,6 @@ function StudentTest() {
         );
 
         return;
-
       }
 
 
@@ -1317,13 +1276,8 @@ function StudentTest() {
         );
 
         return;
-
       }
 
-
-      // =========================================
-      // FULLSCREEN
-      // =========================================
 
       if (!document.fullscreenElement) {
 
@@ -1343,29 +1297,22 @@ function StudentTest() {
           );
 
           return;
-
         }
-
       }
 
 
       setFullscreenReady(true);
 
 
-      // =========================================
-      // CREATE / RESUME TEST ATTEMPT
-      // =========================================
+      // =====================================================
+      // CREATE / RESUME BACKEND ATTEMPT
+      // =====================================================
 
       try {
 
-        console.log(
-          "Starting test attempt..."
-        );
-
-
         const response =
           await api.post(
-            `/api/tests/${testId}/start`,
+            `/api/student/tests/${testId}/start`,
             {},
             {
               headers: {
@@ -1380,13 +1327,17 @@ function StudentTest() {
 
 
         console.log(
-          "Start attempt response:",
+          "Start test response:",
           response.data
         );
 
 
+        const data =
+          response.data;
+
+
         const newAttemptId =
-          response.data.attemptId;
+          data.attemptId;
 
 
         if (!newAttemptId) {
@@ -1396,36 +1347,75 @@ function StudentTest() {
           );
 
           return;
-
         }
 
 
-        // Save in state
-        setAttemptId(newAttemptId);
+        // =================================================
+        // UPDATE TEST DATA
+        // =================================================
+
+        setTest(
+          (previous) => ({
+            ...previous,
+
+            id:
+              data.testId,
+
+            name:
+              data.testName,
+
+            topic:
+              data.topic,
+
+            testType:
+              data.testType,
+
+            totalQuestions:
+              data.totalQuestions,
+
+            totalMarks:
+              data.totalMarks,
+
+            questions:
+              data.questions || []
+          })
+        );
 
 
-        // Save in ref for event listeners
+        // =================================================
+        // ATTEMPT ID
+        // =================================================
+
+        setAttemptId(
+          newAttemptId
+        );
+
         attemptIdRef.current =
           newAttemptId;
 
 
-        console.log(
-          "Attempt ID:",
-          newAttemptId
+        // =================================================
+        // START TIMER
+        // =================================================
+
+        startTimer(
+          data.expiresAt
         );
 
 
-        // =========================================
-        // START MONITORING ONLY AFTER ATTEMPT EXISTS
-        // =========================================
+        // =================================================
+        // START PROCTORING
+        // =================================================
 
-        setProctoringStarted(true);
+        setProctoringStarted(
+          true
+        );
 
 
       } catch (error) {
 
         console.error(
-          "Failed to start test attempt:",
+          "Failed to start test:",
           error
         );
 
@@ -1438,14 +1428,17 @@ function StudentTest() {
             "Session expired. Please login again."
           );
 
-          localStorage.removeItem("token");
+          localStorage.removeItem(
+            "token"
+          );
 
-          localStorage.removeItem("role");
+          localStorage.removeItem(
+            "role"
+          );
 
           navigate("/login");
 
           return;
-
         }
 
 
@@ -1458,7 +1451,18 @@ function StudentTest() {
           );
 
           return;
+        }
 
+
+        if (
+          error.response?.status === 410
+        ) {
+
+          setProctoringError(
+            "This test time has already expired."
+          );
+
+          return;
         }
 
 
@@ -1466,14 +1470,12 @@ function StudentTest() {
           error.response?.data ||
           "Unable to start the test. Please try again."
         );
-
       }
-
     };
 
 
   // =========================================================
-  // CLEANUP MEDIA STREAMS
+  // CLEANUP MEDIA
   // =========================================================
 
   const stopMediaStreams =
@@ -1483,18 +1485,16 @@ function StudentTest() {
 
         cameraStreamRef.current
           .getTracks()
-          .forEach(
-            (track) => {
+          .forEach((track) => {
 
-              track.onended = null;
+            track.onended = null;
 
-              track.stop();
+            track.stop();
 
-            }
-          );
+          });
 
-        cameraStreamRef.current = null;
-
+        cameraStreamRef.current =
+          null;
       }
 
 
@@ -1502,35 +1502,39 @@ function StudentTest() {
 
         screenStreamRef.current
           .getTracks()
-          .forEach(
-            (track) => {
+          .forEach((track) => {
 
-              track.onended = null;
+            track.onended = null;
 
-              track.stop();
+            track.stop();
 
-            }
-          );
+          });
 
-        screenStreamRef.current = null;
-
+        screenStreamRef.current =
+          null;
       }
-
     };
 
 
   // =========================================================
-  // CLEANUP WHEN PAGE IS LEFT
+  // PAGE CLEANUP
   // =========================================================
 
   useEffect(() => {
 
     return () => {
 
-      isSubmittingRef.current = true;
+      isSubmittingRef.current =
+        true;
 
       stopMediaStreams();
 
+      if (timerRef.current) {
+
+        clearInterval(
+          timerRef.current
+        );
+      }
     };
 
   }, []);
@@ -1540,415 +1544,415 @@ function StudentTest() {
   // TEXT ANSWER
   // =========================================================
 
-  const handleTextAnswer = (
-    questionId,
-    value
-  ) => {
+  const handleTextAnswer =
+    (
+      questionId,
+      value
+    ) => {
 
-    setAnswers(
-      (previous) => ({
+      setAnswers(
+        (previous) => ({
 
-        ...previous,
+          ...previous,
 
-        [questionId]: value
+          [questionId]:
+            value
 
-      })
-    );
-
-  };
+        })
+      );
+    };
 
 
   // =========================================================
   // MCQ ANSWER
   // =========================================================
 
-  const handleMCQAnswer = (
-    questionId,
-    optionId
-  ) => {
+  const handleMCQAnswer =
+    (
+      questionId,
+      optionId
+    ) => {
 
-    setAnswers(
-      (previous) => ({
+      setAnswers(
+        (previous) => ({
 
-        ...previous,
+          ...previous,
 
-        [questionId]: optionId
+          [questionId]:
+            optionId
 
-      })
-    );
-
-  };
+        })
+      );
+    };
 
 
   // =========================================================
   // MSQ ANSWER
   // =========================================================
 
-  const handleMSQAnswer = (
-    questionId,
-    optionId
-  ) => {
+  const handleMSQAnswer =
+    (
+      questionId,
+      optionId
+    ) => {
 
-    setAnswers(
-      (previous) => {
+      setAnswers(
+        (previous) => {
 
-        const current =
-          previous[questionId] || [];
+          const current =
+            previous[questionId] ||
+            [];
 
 
-        if (
-          current.includes(optionId)
-        ) {
+          if (
+            current.includes(optionId)
+          ) {
+
+            return {
+
+              ...previous,
+
+              [questionId]:
+                current.filter(
+                  (id) =>
+                    id !== optionId
+                )
+            };
+          }
+
 
           return {
 
             ...previous,
 
-            [questionId]:
-              current.filter(
-                (id) =>
-                  id !== optionId
-              )
+            [questionId]: [
 
+              ...current,
+
+              optionId
+
+            ]
           };
-
         }
-
-
-        return {
-
-          ...previous,
-
-          [questionId]: [
-
-            ...current,
-
-            optionId
-
-          ]
-
-        };
-
-      }
-    );
-
-  };
+      );
+    };
 
 
   // =========================================================
   // SUBMIT TEST
   // =========================================================
 
-  const handleSubmit = async (
-    automaticSubmit = false
-  ) => {
+  const handleSubmit =
+    async (
+      automaticSubmit = false
+    ) => {
 
-    if (!test) {
-
-      return;
-
-    }
-
-
-    if (submitting) {
-
-      return;
-
-    }
+      if (!test) {
+        return;
+      }
 
 
-    if (
-      !attemptIdRef.current
-    ) {
-
-      alert(
-        "Test attempt was not started. Please start the test first."
-      );
-
-      return;
-
-    }
+      if (submitting) {
+        return;
+      }
 
 
-    // -----------------------------------------
-    // CHECK UNANSWERED QUESTIONS
-    // -----------------------------------------
+      if (!attemptIdRef.current) {
 
-    if (!automaticSubmit) {
-
-      const unansweredQuestions =
-        test.questions.filter(
-          (question) => {
-
-            const answer =
-              answers[question.id];
-
-
-            if (
-              test.testType === "MSQ"
-            ) {
-
-              return (
-                !answer ||
-                answer.length === 0
-              );
-
-            }
-
-
-            return (
-              answer === undefined ||
-              answer === ""
-            );
-
-          }
+        alert(
+          "Test attempt was not started. Please start the test first."
         );
 
+        return;
+      }
 
-      if (
-        unansweredQuestions.length > 0
-      ) {
 
-        const confirmSubmit =
-          window.confirm(
-            `You have ${unansweredQuestions.length} unanswered question(s). Do you want to submit anyway?`
+      // -----------------------------------------------------
+      // UNANSWERED QUESTIONS
+      // -----------------------------------------------------
+
+      if (!automaticSubmit) {
+
+        const unansweredQuestions =
+          test.questions.filter(
+            (question) => {
+
+              const answer =
+                answers[
+                  question.id
+                ];
+
+
+              if (
+                test.testType ===
+                "MSQ"
+              ) {
+
+                return (
+                  !answer ||
+                  answer.length === 0
+                );
+              }
+
+
+              return (
+                answer === undefined ||
+                answer === ""
+              );
+            }
           );
 
 
-        if (!confirmSubmit) {
+        if (
+          unansweredQuestions.length > 0
+        ) {
 
-          return;
+          const confirmSubmit =
+            window.confirm(
+              `You have ${unansweredQuestions.length} unanswered question(s). Do you want to submit anyway?`
+            );
 
+
+          if (!confirmSubmit) {
+            return;
+          }
         }
-
       }
 
-    }
 
+      // -----------------------------------------------------
+      // MARK SUBMITTING
+      // -----------------------------------------------------
 
-    // -----------------------------------------
-    // MARK AS SUBMITTING
-    // -----------------------------------------
-
-    isSubmittingRef.current = true;
-
-
-    try {
+      isSubmittingRef.current =
+        true;
 
       setSubmitting(true);
 
 
-      const formattedAnswers =
-        test.questions.map(
-          (question) => {
+      // STOP TIMER IMMEDIATELY
 
-            const answer =
-              answers[question.id];
+      if (timerRef.current) {
+
+        clearInterval(
+          timerRef.current
+        );
+      }
 
 
-            // ===============================
-            // MCQ / MSQ
-            // ===============================
+      try {
 
-            if (
-              test.testType === "MCQ" ||
-              test.testType === "MSQ"
-            ) {
+        const formattedAnswers =
+          test.questions.map(
+            (question) => {
+
+              const answer =
+                answers[
+                  question.id
+                ];
+
+
+              // MCQ / MSQ
+
+              if (
+                test.testType ===
+                  "MCQ" ||
+                test.testType ===
+                  "MSQ"
+              ) {
+
+                return {
+
+                  questionId:
+                    question.id,
+
+                  answer:
+                    null,
+
+                  selectedOptionIds:
+                    test.testType ===
+                    "MSQ"
+
+                      ? answer || []
+
+                      : answer
+                        ? [answer]
+                        : []
+                };
+              }
+
+
+              // THEORETICAL / CODING
 
               return {
 
                 questionId:
                   question.id,
 
-                answer: null,
+                answer:
+                  answer || "",
 
                 selectedOptionIds:
-                  test.testType === "MSQ"
-
-                    ? answer || []
-
-                    : answer
-                      ? [answer]
-                      : []
-
+                  []
               };
-
             }
-
-
-            // ===============================
-            // THEORETICAL / LOGICAL
-            // ===============================
-
-            return {
-
-              questionId:
-                question.id,
-
-              answer:
-                answer || "",
-
-              selectedOptionIds: []
-
-            };
-
-          }
-        );
-
-
-      console.log(
-        "Submitting answers:",
-        formattedAnswers
-      );
-
-
-      const response =
-        await api.post(
-
-          `/api/tests/${testId}/submit`,
-
-          {
-            answers:
-              formattedAnswers
-          },
-
-          {
-            headers: {
-
-              Authorization:
-                `Bearer ${token}`,
-
-              "Content-Type":
-                "application/json"
-
-            }
-
-          }
-
-        );
-
-
-      console.log(
-        "Submit response:",
-        response.data
-      );
-
-
-      // =========================================
-      // STOP CAMERA AND SCREEN SHARE
-      // =========================================
-
-      stopMediaStreams();
-
-
-      // =========================================
-      // EXIT FULLSCREEN
-      // =========================================
-
-      if (document.fullscreenElement) {
-
-        try {
-
-          await document.exitFullscreen();
-
-        } catch (error) {
-
-          console.log(
-            "Could not exit fullscreen."
           );
 
+
+        console.log(
+          "Submitting answers:",
+          formattedAnswers
+        );
+
+
+        const response =
+          await api.post(
+            `/api/tests/${testId}/submit`,
+            {
+              attemptId:
+                attemptIdRef.current,
+
+              answers:
+                formattedAnswers
+            },
+            {
+              headers: {
+
+                Authorization:
+                  `Bearer ${token}`,
+
+                "Content-Type":
+                  "application/json"
+              }
+            }
+          );
+
+
+        console.log(
+          "Submit response:",
+          response.data
+        );
+
+
+        // -----------------------------------------------------
+        // STOP MEDIA
+        // -----------------------------------------------------
+
+        stopMediaStreams();
+
+
+        // -----------------------------------------------------
+        // EXIT FULLSCREEN
+        // -----------------------------------------------------
+
+        if (
+          document.fullscreenElement
+        ) {
+
+          try {
+
+            await document.exitFullscreen();
+
+          } catch (error) {
+
+            console.log(
+              "Could not exit fullscreen."
+            );
+          }
         }
 
-      }
+
+        // -----------------------------------------------------
+        // ATTEMPT ID
+        // -----------------------------------------------------
+
+        const submittedAttemptId =
+          response.data.attemptId ||
+          attemptIdRef.current;
 
 
-      // =========================================
-      // GET ATTEMPT ID
-      // =========================================
+        if (!submittedAttemptId) {
 
-      const submittedAttemptId =
-        response.data.attemptId ||
-        attemptIdRef.current;
+          alert(
+            "Test submitted, but attempt ID was not returned."
+          );
 
-
-      if (!submittedAttemptId) {
-
-        alert(
-          "Test submitted, but attempt ID was not returned."
-        );
-
-        return;
-
-      }
+          return;
+        }
 
 
-      // =========================================
-      // GO TO RESULT PAGE
-      // =========================================
-
-      navigate(
-        `/student/result/${submittedAttemptId}`
-      );
-
-
-    } catch (error) {
-
-      console.error(
-        "Failed to submit test:",
-        error
-      );
-
-
-      if (
-        error.response?.status === 401
-      ) {
-
-        alert(
-          "Session expired. Please login again."
-        );
-
-        localStorage.removeItem(
-          "token"
-        );
-
-        localStorage.removeItem(
-          "role"
-        );
-
-        navigate("/login");
-
-
-      } else if (
-        error.response?.status === 403
-      ) {
-
-        alert(
-          "You are not allowed to submit this test."
+        navigate(
+          `/student/result/${submittedAttemptId}`
         );
 
 
-      } else {
+      } catch (error) {
 
         console.error(
-          "Server response:",
-          error.response?.data
+          "Failed to submit test:",
+          error
         );
 
 
-        alert(
-          error.response?.data ||
-          "Failed to submit the test."
-        );
+        if (
+          error.response?.status === 401
+        ) {
 
+          alert(
+            "Session expired. Please login again."
+          );
+
+          localStorage.removeItem(
+            "token"
+          );
+
+          localStorage.removeItem(
+            "role"
+          );
+
+          navigate("/login");
+
+
+        } else if (
+          error.response?.status === 403
+        ) {
+
+          alert(
+            "You are not allowed to submit this test."
+          );
+
+
+        } else if (
+          error.response?.status === 410
+        ) {
+
+          alert(
+            "The test time has expired."
+          );
+
+          stopMediaStreams();
+
+          navigate(
+            `/student/result/${attemptIdRef.current}`
+          );
+
+
+        } else {
+
+          alert(
+            error.response?.data ||
+            "Failed to submit the test."
+          );
+
+          isSubmittingRef.current =
+            false;
+        }
+
+      } finally {
+
+        setSubmitting(false);
       }
-
-    } finally {
-
-      setSubmitting(false);
-
-    }
-
-  };
+    };
 
 
   // =========================================================
@@ -1971,9 +1975,7 @@ function StudentTest() {
         </p>
 
       </div>
-
     );
-
   }
 
 
@@ -2008,14 +2010,12 @@ function StudentTest() {
         </button>
 
       </div>
-
     );
-
   }
 
 
   // =========================================================
-  // PROCTORING SETUP SCREEN
+  // PROCTORING SETUP
   // =========================================================
 
   if (!proctoringStarted) {
@@ -2065,8 +2065,6 @@ function StudentTest() {
                   </p>
 
 
-                  {/* TEST INFORMATION */}
-
                   <div className="alert alert-info">
 
                     <strong>
@@ -2090,6 +2088,14 @@ function StudentTest() {
                     </strong>{" "}
 
                     {test.totalMarks}
+
+                    <br />
+
+                    <strong>
+                      Time Limit:
+                    </strong>{" "}
+
+                    30 Minutes
 
                   </div>
 
@@ -2157,8 +2163,6 @@ function StudentTest() {
                   </div>
 
 
-                  {/* CAMERA PREVIEW */}
-
                   {cameraReady && (
 
                     <div className="text-center mb-3">
@@ -2180,8 +2184,6 @@ function StudentTest() {
 
                   )}
 
-
-                  {/* CAMERA ERROR */}
 
                   {cameraError && (
 
@@ -2240,7 +2242,7 @@ function StudentTest() {
                   </div>
 
 
-                  {/* SCREEN SHARE */}
+                  {/* SCREEN */}
 
                   <div className="card mb-3">
 
@@ -2302,8 +2304,6 @@ function StudentTest() {
 
                   </div>
 
-
-                  {/* SCREEN ERROR */}
 
                   {screenError && (
 
@@ -2378,8 +2378,6 @@ function StudentTest() {
                   </div>
 
 
-                  {/* ERROR */}
-
                   {proctoringError && (
 
                     <div className="alert alert-danger">
@@ -2390,8 +2388,6 @@ function StudentTest() {
 
                   )}
 
-
-                  {/* START TEST */}
 
                   <div className="text-center mt-4">
 
@@ -2416,12 +2412,26 @@ function StudentTest() {
 
                   <div className="alert alert-warning mt-4 mb-0">
 
-                    <strong>Important:</strong>
+                    <strong>
+                      Important:
+                    </strong>
 
                     <ul className="mb-0 mt-2">
 
                       <li>
-                        Do not switch tabs during the test.
+                        Test duration is 30 minutes.
+                      </li>
+
+                      <li>
+                        Timer starts when you click Start Test.
+                      </li>
+
+                      <li>
+                        Refreshing the page will not reset the timer.
+                      </li>
+
+                      <li>
+                        Do not switch tabs.
                       </li>
 
                       <li>
@@ -2433,11 +2443,7 @@ function StudentTest() {
                       </li>
 
                       <li>
-                        Keep the test in fullscreen mode.
-                      </li>
-
-                      <li>
-                        Copy, paste and right-click are restricted.
+                        Keep fullscreen enabled.
                       </li>
 
                     </ul>
@@ -2456,10 +2462,17 @@ function StudentTest() {
         </div>
 
       </div>
-
     );
-
   }
+
+
+  // =========================================================
+  // TIMER STYLE
+  // =========================================================
+
+  const timerDanger =
+    timeLeft !== null &&
+    timeLeft <= 300;
 
 
   // =========================================================
@@ -2470,10 +2483,9 @@ function StudentTest() {
 
     <div className="min-vh-100 bg-light">
 
-
-      {/* =========================
+      {/* =====================================================
           NAVBAR
-      ========================= */}
+      ===================================================== */}
 
       <nav className="navbar navbar-dark bg-dark">
 
@@ -2488,11 +2500,29 @@ function StudentTest() {
 
           <div className="d-flex align-items-center gap-2 flex-wrap">
 
+            {/* TIMER */}
+
+            <span
+              className={
+                timerDanger
+                  ? "badge bg-danger fs-6 px-3 py-2"
+                  : "badge bg-primary fs-6 px-3 py-2"
+              }
+            >
+
+              ⏱️ Time Left:{" "}
+
+              {formatTime(timeLeft)}
+
+            </span>
+
+
             <span className="badge bg-success">
 
               📷 Camera
 
             </span>
+
 
             <span className="badge bg-success">
 
@@ -2500,11 +2530,13 @@ function StudentTest() {
 
             </span>
 
+
             <span className="badge bg-success">
 
               🔲 Fullscreen
 
             </span>
+
 
             <span
               className={
@@ -2528,9 +2560,31 @@ function StudentTest() {
       </nav>
 
 
-      {/* =========================
+      {/* =====================================================
+          TIMER WARNING
+      ===================================================== */}
+
+      {timerDanger &&
+        timeLeft > 0 && (
+
+          <div className="container mt-3">
+
+            <div className="alert alert-danger text-center fw-bold">
+
+              ⏰ Only{" "}
+              {formatTime(timeLeft)}
+              {" "}remaining!
+
+            </div>
+
+          </div>
+
+        )}
+
+
+      {/* =====================================================
           PROCTORING WARNING
-      ========================= */}
+      ===================================================== */}
 
       {proctoringError && (
 
@@ -2547,9 +2601,9 @@ function StudentTest() {
       )}
 
 
-      {/* =========================
+      {/* =====================================================
           LAST VIOLATION
-      ========================= */}
+      ===================================================== */}
 
       {lastViolation && (
 
@@ -2570,9 +2624,9 @@ function StudentTest() {
       )}
 
 
-      {/* =========================
+      {/* =====================================================
           CONTENT
-      ========================= */}
+      ===================================================== */}
 
       <div className="container py-4">
 
@@ -2583,15 +2637,32 @@ function StudentTest() {
 
           <div className="card-body">
 
-            <h2 className="fw-bold">
+            <div className="d-flex justify-content-between align-items-center">
 
-              {test.name}
+              <h2 className="fw-bold mb-0">
 
-            </h2>
+                {test.name}
+
+              </h2>
+
+
+              <div
+                className={
+                  timerDanger
+                    ? "alert alert-danger mb-0 py-2 px-3 fw-bold"
+                    : "alert alert-primary mb-0 py-2 px-3 fw-bold"
+                }
+              >
+
+                ⏱️{" "}
+                {formatTime(timeLeft)}
+
+              </div>
+
+            </div>
 
 
             <div className="row mt-3">
-
 
               <div className="col-md-3">
 
@@ -2600,10 +2671,8 @@ function StudentTest() {
                 </strong>
 
                 <p>
-
                   {test.topic?.name ||
                     "N/A"}
-
                 </p>
 
               </div>
@@ -2616,9 +2685,7 @@ function StudentTest() {
                 </strong>
 
                 <p>
-
                   {test.testType}
-
                 </p>
 
               </div>
@@ -2631,9 +2698,7 @@ function StudentTest() {
                 </strong>
 
                 <p>
-
                   {test.totalQuestions}
-
                 </p>
 
               </div>
@@ -2646,13 +2711,10 @@ function StudentTest() {
                 </strong>
 
                 <p>
-
                   {test.totalMarks}
-
                 </p>
 
               </div>
-
 
             </div>
 
@@ -2685,7 +2747,6 @@ function StudentTest() {
 
 
             <div className="row mt-3">
-
 
               <div className="col-md-3">
 
@@ -2770,7 +2831,6 @@ function StudentTest() {
 
               </div>
 
-
             </div>
 
 
@@ -2796,7 +2856,7 @@ function StudentTest() {
         </div>
 
 
-        {/* VIOLATION HISTORY */}
+        {/* VIOLATIONS */}
 
         {violations.length > 0 && (
 
@@ -2903,9 +2963,6 @@ function StudentTest() {
 
               <div className="card-body">
 
-
-                {/* QUESTION HEADER */}
-
                 <div className="d-flex justify-content-between">
 
                   <h5 className="fw-bold">
@@ -2941,20 +2998,14 @@ function StudentTest() {
                   "THEORETICAL" && (
 
                   <textarea
-
                     className="form-control"
-
                     rows="4"
-
-                    placeholder=
-                      "Enter your answer..."
-
+                    placeholder="Enter your answer..."
                     value={
                       answers[
                         question.id
                       ] || ""
                     }
-
                     onChange={
                       (event) =>
                         handleTextAnswer(
@@ -2962,7 +3013,6 @@ function StudentTest() {
                           event.target.value
                         )
                     }
-
                   />
 
                 )}
@@ -2974,21 +3024,14 @@ function StudentTest() {
                   "LOGICAL_CODING" && (
 
                   <textarea
-
-                    className=
-                      "form-control font-monospace"
-
+                    className="form-control font-monospace"
                     rows="8"
-
-                    placeholder=
-                      "Write your solution/code here..."
-
+                    placeholder="Write your solution/code here..."
                     value={
                       answers[
                         question.id
                       ] || ""
                     }
-
                     onChange={
                       (event) =>
                         handleTextAnswer(
@@ -2996,7 +3039,6 @@ function StudentTest() {
                           event.target.value
                         )
                     }
-
                   />
 
                 )}
@@ -3013,52 +3055,38 @@ function StudentTest() {
                       (option) => (
 
                         <div
-                          className=
-                            "form-check mb-2"
-
+                          className="form-check mb-2"
                           key={option.id}
                         >
 
                           <input
-
-                            className=
-                              "form-check-input"
-
+                            className="form-check-input"
                             type="radio"
-
                             name={
                               `question-${question.id}`
                             }
-
                             id={
                               `option-${option.id}`
                             }
-
                             checked={
                               answers[
                                 question.id
                               ] === option.id
                             }
-
                             onChange={() =>
                               handleMCQAnswer(
                                 question.id,
                                 option.id
                               )
                             }
-
                           />
 
 
                           <label
-
-                            className=
-                              "form-check-label"
-
+                            className="form-check-label"
                             htmlFor={
                               `option-${option.id}`
                             }
-
                           >
 
                             {option.optionText}
@@ -3094,48 +3122,35 @@ function StudentTest() {
                         return (
 
                           <div
-                            className=
-                              "form-check mb-2"
-
+                            className="form-check mb-2"
                             key={option.id}
                           >
 
                             <input
-
-                              className=
-                                "form-check-input"
-
+                              className="form-check-input"
                               type="checkbox"
-
                               id={
                                 `option-${option.id}`
                               }
-
                               checked={
                                 selected.includes(
                                   option.id
                                 )
                               }
-
                               onChange={() =>
                                 handleMSQAnswer(
                                   question.id,
                                   option.id
                                 )
                               }
-
                             />
 
 
                             <label
-
-                              className=
-                                "form-check-label"
-
+                              className="form-check-label"
                               htmlFor={
                                 `option-${option.id}`
                               }
-
                             >
 
                               {option.optionText}
@@ -3145,7 +3160,6 @@ function StudentTest() {
                           </div>
 
                         );
-
                       }
                     )}
 
@@ -3161,23 +3175,21 @@ function StudentTest() {
         )}
 
 
-        {/* SUBMIT BUTTON */}
+        {/* SUBMIT */}
 
         {test.questions.length > 0 && (
 
           <div className="text-center mb-5">
 
             <button
-
-              className=
-                "btn btn-success btn-lg px-5"
-
+              className="btn btn-success btn-lg px-5"
               onClick={() =>
                 handleSubmit(false)
               }
-
-              disabled={submitting}
-
+              disabled={
+                submitting ||
+                timeLeft === 0
+              }
             >
 
               {submitting
@@ -3193,9 +3205,7 @@ function StudentTest() {
       </div>
 
     </div>
-
   );
-
 }
 
 

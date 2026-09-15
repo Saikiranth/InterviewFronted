@@ -58,6 +58,26 @@ function StudentTest() {
 
 
   // =========================================================
+  // CHEATING / VIOLATION STATE
+  // =========================================================
+
+  const [violations, setViolations] =
+    useState([]);
+
+  const [violationCount, setViolationCount] =
+    useState(0);
+
+  const [lastViolation, setLastViolation] =
+    useState("");
+
+  const MAX_VIOLATIONS = 5;
+
+
+  // Prevent multiple automatic submissions
+  const autoSubmittingRef = useRef(false);
+
+
+  // =========================================================
   // MEDIA REFERENCES
   // =========================================================
 
@@ -190,7 +210,6 @@ function StudentTest() {
         cameraStreamRef.current = stream;
 
 
-        // Attach stream to video element
         if (videoRef.current) {
 
           videoRef.current.srcObject =
@@ -209,13 +228,17 @@ function StudentTest() {
         );
 
 
-        // Detect if camera/microphone is stopped
+        // Camera stopped
         stream.getVideoTracks().forEach(
           (track) => {
 
             track.onended = () => {
 
               setCameraReady(false);
+
+              registerViolation(
+                "Camera access was stopped"
+              );
 
               setProctoringError(
                 "Camera access was stopped. Please enable your camera again."
@@ -227,12 +250,17 @@ function StudentTest() {
         );
 
 
+        // Microphone stopped
         stream.getAudioTracks().forEach(
           (track) => {
 
             track.onended = () => {
 
               setMicrophoneReady(false);
+
+              registerViolation(
+                "Microphone access was stopped"
+              );
 
               setProctoringError(
                 "Microphone access was stopped."
@@ -327,6 +355,10 @@ function StudentTest() {
 
             setScreenReady(false);
 
+            registerViolation(
+              "Screen sharing was stopped"
+            );
+
             setProctoringError(
               "Screen sharing was stopped. Please start screen sharing again."
             );
@@ -404,10 +436,203 @@ function StudentTest() {
 
 
   // =========================================================
-  // FULLSCREEN CHANGE DETECTION
+  // REGISTER VIOLATION
+  // =========================================================
+
+  const registerViolation = (reason) => {
+
+    if (!proctoringStarted) {
+
+      return;
+
+    }
+
+
+    const timestamp =
+      new Date().toLocaleTimeString();
+
+
+    const violation = {
+
+      id: Date.now(),
+
+      reason,
+
+      timestamp
+
+    };
+
+
+    setViolations(
+      (previous) => [
+        ...previous,
+        violation
+      ]
+    );
+
+
+    setViolationCount(
+      (previous) => {
+
+        const newCount =
+          previous + 1;
+
+
+        return newCount;
+
+      }
+    );
+
+
+    setLastViolation(reason);
+
+
+    console.warn(
+      `PROCTORING VIOLATION: ${reason}`
+    );
+
+
+    // Warning
+    setProctoringError(
+      `⚠️ Violation detected: ${reason}`
+    );
+
+  };
+
+
+  // =========================================================
+  // AUTOMATIC SUBMISSION
+  // =========================================================
+
+  const checkViolationLimit =
+    (count) => {
+
+      if (
+        count >= MAX_VIOLATIONS &&
+        !autoSubmittingRef.current &&
+        !submitting
+      ) {
+
+        autoSubmittingRef.current = true;
+
+
+        setTimeout(() => {
+
+          alert(
+            "Maximum number of proctoring violations reached. Your test will be submitted automatically."
+          );
+
+
+          handleSubmit(true);
+
+        }, 500);
+
+      }
+
+    };
+
+
+  // =========================================================
+  // WATCH VIOLATION COUNT
   // =========================================================
 
   useEffect(() => {
+
+    if (!proctoringStarted) {
+
+      return;
+
+    }
+
+
+    checkViolationLimit(
+      violationCount
+    );
+
+  }, [
+    violationCount,
+    proctoringStarted
+  ]);
+
+
+  // =========================================================
+  // TAB SWITCH / WINDOW BLUR DETECTION
+  // =========================================================
+
+  useEffect(() => {
+
+    if (!proctoringStarted) {
+
+      return;
+
+    }
+
+
+    const handleVisibilityChange =
+      () => {
+
+        if (document.hidden) {
+
+          registerViolation(
+            "Browser tab/window was switched"
+          );
+
+        }
+
+      };
+
+
+    const handleBlur = () => {
+
+      registerViolation(
+        "Test window lost focus"
+      );
+
+    };
+
+
+    document.addEventListener(
+      "visibilitychange",
+      handleVisibilityChange
+    );
+
+
+    window.addEventListener(
+      "blur",
+      handleBlur
+    );
+
+
+    return () => {
+
+      document.removeEventListener(
+        "visibilitychange",
+        handleVisibilityChange
+      );
+
+
+      window.removeEventListener(
+        "blur",
+        handleBlur
+      );
+
+    };
+
+  }, [proctoringStarted]);
+
+
+  // =========================================================
+  // FULLSCREEN EXIT DETECTION
+  // =========================================================
+
+  useEffect(() => {
+
+    if (!proctoringStarted) {
+
+      return;
+
+    }
+
 
     const handleFullscreenChange =
       () => {
@@ -419,6 +644,11 @@ function StudentTest() {
         } else {
 
           setFullscreenReady(false);
+
+
+          registerViolation(
+            "Fullscreen mode was exited"
+          );
 
         }
 
@@ -440,7 +670,452 @@ function StudentTest() {
 
     };
 
-  }, []);
+  }, [proctoringStarted]);
+
+
+  // =========================================================
+  // COPY DETECTION
+  // =========================================================
+
+  useEffect(() => {
+
+    if (!proctoringStarted) {
+
+      return;
+
+    }
+
+
+    const handleCopy = (event) => {
+
+      event.preventDefault();
+
+      registerViolation(
+        "Copy operation was attempted"
+      );
+
+    };
+
+
+    document.addEventListener(
+      "copy",
+      handleCopy
+    );
+
+
+    return () => {
+
+      document.removeEventListener(
+        "copy",
+        handleCopy
+      );
+
+    };
+
+  }, [proctoringStarted]);
+
+
+  // =========================================================
+  // PASTE DETECTION
+  // =========================================================
+
+  useEffect(() => {
+
+    if (!proctoringStarted) {
+
+      return;
+
+    }
+
+
+    const handlePaste = (event) => {
+
+      event.preventDefault();
+
+      registerViolation(
+        "Paste operation was attempted"
+      );
+
+    };
+
+
+    document.addEventListener(
+      "paste",
+      handlePaste
+    );
+
+
+    return () => {
+
+      document.removeEventListener(
+        "paste",
+        handlePaste
+      );
+
+    };
+
+  }, [proctoringStarted]);
+
+
+  // =========================================================
+  // CUT DETECTION
+  // =========================================================
+
+  useEffect(() => {
+
+    if (!proctoringStarted) {
+
+      return;
+
+    }
+
+
+    const handleCut = (event) => {
+
+      event.preventDefault();
+
+      registerViolation(
+        "Cut operation was attempted"
+      );
+
+    };
+
+
+    document.addEventListener(
+      "cut",
+      handleCut
+    );
+
+
+    return () => {
+
+      document.removeEventListener(
+        "cut",
+        handleCut
+      );
+
+    };
+
+  }, [proctoringStarted]);
+
+
+  // =========================================================
+  // RIGHT CLICK DETECTION
+  // =========================================================
+
+  useEffect(() => {
+
+    if (!proctoringStarted) {
+
+      return;
+
+    }
+
+
+    const handleContextMenu = (event) => {
+
+      event.preventDefault();
+
+      registerViolation(
+        "Right-click was attempted"
+      );
+
+    };
+
+
+    document.addEventListener(
+      "contextmenu",
+      handleContextMenu
+    );
+
+
+    return () => {
+
+      document.removeEventListener(
+        "contextmenu",
+        handleContextMenu
+      );
+
+    };
+
+  }, [proctoringStarted]);
+
+
+  // =========================================================
+  // KEYBOARD SHORTCUT DETECTION
+  // =========================================================
+
+  useEffect(() => {
+
+    if (!proctoringStarted) {
+
+      return;
+
+    }
+
+
+    const handleKeyDown = (event) => {
+
+      // F12
+      if (event.key === "F12") {
+
+        event.preventDefault();
+
+        registerViolation(
+          "Developer tools shortcut F12 was attempted"
+        );
+
+        return;
+
+      }
+
+
+      // Ctrl + Shift + I
+      if (
+        event.ctrlKey &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "i"
+      ) {
+
+        event.preventDefault();
+
+        registerViolation(
+          "Developer tools shortcut Ctrl+Shift+I was attempted"
+        );
+
+        return;
+
+      }
+
+
+      // Ctrl + Shift + J
+      if (
+        event.ctrlKey &&
+        event.shiftKey &&
+        event.key.toLowerCase() === "j"
+      ) {
+
+        event.preventDefault();
+
+        registerViolation(
+          "Developer tools shortcut Ctrl+Shift+J was attempted"
+        );
+
+        return;
+
+      }
+
+
+      // Ctrl + U
+      if (
+        event.ctrlKey &&
+        event.key.toLowerCase() === "u"
+      ) {
+
+        event.preventDefault();
+
+        registerViolation(
+          "View-source shortcut Ctrl+U was attempted"
+        );
+
+        return;
+
+      }
+
+
+      // Ctrl + C
+      if (
+        event.ctrlKey &&
+        event.key.toLowerCase() === "c"
+      ) {
+
+        event.preventDefault();
+
+        registerViolation(
+          "Copy shortcut Ctrl+C was attempted"
+        );
+
+        return;
+
+      }
+
+
+      // Ctrl + V
+      if (
+        event.ctrlKey &&
+        event.key.toLowerCase() === "v"
+      ) {
+
+        event.preventDefault();
+
+        registerViolation(
+          "Paste shortcut Ctrl+V was attempted"
+        );
+
+        return;
+
+      }
+
+
+      // Ctrl + X
+      if (
+        event.ctrlKey &&
+        event.key.toLowerCase() === "x"
+      ) {
+
+        event.preventDefault();
+
+        registerViolation(
+          "Cut shortcut Ctrl+X was attempted"
+        );
+
+        return;
+
+      }
+
+    };
+
+
+    document.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
+
+
+    return () => {
+
+      document.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+
+    };
+
+  }, [proctoringStarted]);
+
+
+  // =========================================================
+  // CAMERA TRACK MONITORING
+  // =========================================================
+
+  useEffect(() => {
+
+    if (!proctoringStarted) {
+
+      return;
+
+    }
+
+
+    const checkCamera =
+      setInterval(() => {
+
+        const stream =
+          cameraStreamRef.current;
+
+
+        if (!stream) {
+
+          return;
+
+        }
+
+
+        const videoTracks =
+          stream.getVideoTracks();
+
+
+        const audioTracks =
+          stream.getAudioTracks();
+
+
+        if (
+          videoTracks.length === 0 ||
+          !videoTracks[0].enabled ||
+          videoTracks[0].readyState === "ended"
+        ) {
+
+          setCameraReady(false);
+
+        }
+
+
+        if (
+          audioTracks.length === 0 ||
+          !audioTracks[0].enabled ||
+          audioTracks[0].readyState === "ended"
+        ) {
+
+          setMicrophoneReady(false);
+
+        }
+
+      }, 2000);
+
+
+    return () => {
+
+      clearInterval(
+        checkCamera
+      );
+
+    };
+
+  }, [proctoringStarted]);
+
+
+  // =========================================================
+  // SCREEN SHARE MONITORING
+  // =========================================================
+
+  useEffect(() => {
+
+    if (!proctoringStarted) {
+
+      return;
+
+    }
+
+
+    const checkScreenShare =
+      setInterval(() => {
+
+        const stream =
+          screenStreamRef.current;
+
+
+        if (!stream) {
+
+          return;
+
+        }
+
+
+        const tracks =
+          stream.getVideoTracks();
+
+
+        if (
+          tracks.length === 0 ||
+          tracks[0].readyState === "ended"
+        ) {
+
+          setScreenReady(false);
+
+        }
+
+      }, 2000);
+
+
+    return () => {
+
+      clearInterval(
+        checkScreenShare
+      );
+
+    };
+
+  }, [proctoringStarted]);
 
 
   // =========================================================
@@ -453,7 +1128,6 @@ function StudentTest() {
       setProctoringError("");
 
 
-      // Camera check
       if (!cameraReady) {
 
         setProctoringError(
@@ -465,7 +1139,6 @@ function StudentTest() {
       }
 
 
-      // Microphone check
       if (!microphoneReady) {
 
         setProctoringError(
@@ -477,7 +1150,6 @@ function StudentTest() {
       }
 
 
-      // Screen check
       if (!screenReady) {
 
         setProctoringError(
@@ -489,7 +1161,6 @@ function StudentTest() {
       }
 
 
-      // Fullscreen
       if (!document.fullscreenElement) {
 
         try {
@@ -669,9 +1340,18 @@ function StudentTest() {
   // SUBMIT TEST
   // =========================================================
 
-  const handleSubmit = async () => {
+  const handleSubmit = async (
+    automaticSubmit = false
+  ) => {
 
     if (!test) {
+
+      return;
+
+    }
+
+
+    if (submitting) {
 
       return;
 
@@ -682,48 +1362,52 @@ function StudentTest() {
     // CHECK UNANSWERED QUESTIONS
     // -----------------------------------------
 
-    const unansweredQuestions =
-      test.questions.filter(
-        (question) => {
+    if (!automaticSubmit) {
 
-          const answer =
-            answers[question.id];
+      const unansweredQuestions =
+        test.questions.filter(
+          (question) => {
+
+            const answer =
+              answers[question.id];
 
 
-          if (
-            test.testType === "MSQ"
-          ) {
+            if (
+              test.testType === "MSQ"
+            ) {
+
+              return (
+                !answer ||
+                answer.length === 0
+              );
+
+            }
+
 
             return (
-              !answer ||
-              answer.length === 0
+              answer === undefined ||
+              answer === ""
             );
 
           }
-
-
-          return (
-            answer === undefined ||
-            answer === ""
-          );
-
-        }
-      );
-
-
-    if (
-      unansweredQuestions.length > 0
-    ) {
-
-      const confirmSubmit =
-        window.confirm(
-          `You have ${unansweredQuestions.length} unanswered question(s). Do you want to submit anyway?`
         );
 
 
-      if (!confirmSubmit) {
+      if (
+        unansweredQuestions.length > 0
+      ) {
 
-        return;
+        const confirmSubmit =
+          window.confirm(
+            `You have ${unansweredQuestions.length} unanswered question(s). Do you want to submit anyway?`
+          );
+
+
+        if (!confirmSubmit) {
+
+          return;
+
+        }
 
       }
 
@@ -1436,6 +2120,10 @@ function StudentTest() {
                         Keep the test in fullscreen mode.
                       </li>
 
+                      <li>
+                        Copy, paste and right-click are restricted.
+                      </li>
+
                     </ul>
 
                   </div>
@@ -1482,7 +2170,7 @@ function StudentTest() {
           </span>
 
 
-          <div className="d-flex align-items-center gap-2">
+          <div className="d-flex align-items-center gap-2 flex-wrap">
 
             <span className="badge bg-success">
 
@@ -1499,6 +2187,21 @@ function StudentTest() {
             <span className="badge bg-success">
 
               🔲 Fullscreen
+
+            </span>
+
+            <span
+              className={
+                violationCount === 0
+                  ? "badge bg-success"
+                  : violationCount < 4
+                    ? "badge bg-warning text-dark"
+                    : "badge bg-danger"
+              }
+            >
+
+              ⚠️ Violations:{" "}
+              {violationCount}/{MAX_VIOLATIONS}
 
             </span>
 
@@ -1519,7 +2222,30 @@ function StudentTest() {
 
           <div className="alert alert-danger">
 
-            ⚠️ {proctoringError}
+            {proctoringError}
+
+          </div>
+
+        </div>
+
+      )}
+
+
+      {/* =========================
+          LAST VIOLATION
+      ========================= */}
+
+      {lastViolation && (
+
+        <div className="container">
+
+          <div className="alert alert-warning">
+
+            <strong>
+              Latest violation:
+            </strong>{" "}
+
+            {lastViolation}
 
           </div>
 
@@ -1619,7 +2345,7 @@ function StudentTest() {
         </div>
 
 
-        {/* CAMERA PREVIEW */}
+        {/* PROCTORING STATUS */}
 
         <div className="card shadow-sm mb-4">
 
@@ -1638,6 +2364,96 @@ function StudentTest() {
                 Monitoring
 
               </span>
+
+            </div>
+
+
+            <div className="row mt-3">
+
+
+              <div className="col-md-3">
+
+                <span
+                  className={
+                    cameraReady
+                      ? "text-success"
+                      : "text-danger"
+                  }
+                >
+
+                  📷 Camera{" "}
+
+                  {cameraReady
+                    ? "✓"
+                    : "✗"}
+
+                </span>
+
+              </div>
+
+
+              <div className="col-md-3">
+
+                <span
+                  className={
+                    microphoneReady
+                      ? "text-success"
+                      : "text-danger"
+                  }
+                >
+
+                  🎤 Microphone{" "}
+
+                  {microphoneReady
+                    ? "✓"
+                    : "✗"}
+
+                </span>
+
+              </div>
+
+
+              <div className="col-md-3">
+
+                <span
+                  className={
+                    screenReady
+                      ? "text-success"
+                      : "text-danger"
+                  }
+                >
+
+                  🖥️ Screen{" "}
+
+                  {screenReady
+                    ? "✓"
+                    : "✗"}
+
+                </span>
+
+              </div>
+
+
+              <div className="col-md-3">
+
+                <span
+                  className={
+                    fullscreenReady
+                      ? "text-success"
+                      : "text-danger"
+                  }
+                >
+
+                  🔲 Fullscreen{" "}
+
+                  {fullscreenReady
+                    ? "✓"
+                    : "✗"}
+
+                </span>
+
+              </div>
+
 
             </div>
 
@@ -1662,6 +2478,87 @@ function StudentTest() {
           </div>
 
         </div>
+
+
+        {/* VIOLATION HISTORY */}
+
+        {violations.length > 0 && (
+
+          <div className="card shadow-sm mb-4">
+
+            <div className="card-body">
+
+              <h5 className="fw-bold text-danger">
+
+                ⚠️ Proctoring Violations
+
+              </h5>
+
+
+              <div className="table-responsive">
+
+                <table className="table table-sm table-bordered mb-0">
+
+                  <thead>
+
+                    <tr>
+
+                      <th>
+                        #
+                      </th>
+
+                      <th>
+                        Violation
+                      </th>
+
+                      <th>
+                        Time
+                      </th>
+
+                    </tr>
+
+                  </thead>
+
+
+                  <tbody>
+
+                    {violations.map(
+                      (violation, index) => (
+
+                        <tr
+                          key={
+                            violation.id
+                          }
+                        >
+
+                          <td>
+                            {index + 1}
+                          </td>
+
+                          <td>
+                            {violation.reason}
+                          </td>
+
+                          <td>
+                            {violation.timestamp}
+                          </td>
+
+                        </tr>
+
+                      )
+                    )}
+
+                  </tbody>
+
+                </table>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        )}
 
 
         {/* NO QUESTIONS */}
@@ -1969,7 +2866,9 @@ function StudentTest() {
               className=
                 "btn btn-success btn-lg px-5"
 
-              onClick={handleSubmit}
+              onClick={() =>
+                handleSubmit(false)
+              }
 
               disabled={submitting}
 
@@ -1995,3 +2894,4 @@ function StudentTest() {
 
 
 export default StudentTest;
+

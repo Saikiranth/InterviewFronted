@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+```jsx
+import { useEffect, useRef, useState } from "react";
 import {
   useNavigate,
   useParams
@@ -14,16 +15,62 @@ function StudentTest() {
   const navigate = useNavigate();
 
 
+  // =========================================================
+  // TEST STATE
+  // =========================================================
+
   const [test, setTest] = useState(null);
 
   const [answers, setAnswers] = useState({});
 
-  const [loading, setLoading] =
-    useState(true);
+  const [loading, setLoading] = useState(true);
 
-  const [submitting, setSubmitting] =
+  const [submitting, setSubmitting] = useState(false);
+
+
+  // =========================================================
+  // PROCTORING STATE
+  // =========================================================
+
+  const [proctoringStarted, setProctoringStarted] =
     useState(false);
 
+  const [cameraReady, setCameraReady] =
+    useState(false);
+
+  const [microphoneReady, setMicrophoneReady] =
+    useState(false);
+
+  const [screenReady, setScreenReady] =
+    useState(false);
+
+  const [fullscreenReady, setFullscreenReady] =
+    useState(false);
+
+  const [proctoringError, setProctoringError] =
+    useState("");
+
+  const [cameraError, setCameraError] =
+    useState("");
+
+  const [screenError, setScreenError] =
+    useState("");
+
+
+  // =========================================================
+  // MEDIA REFERENCES
+  // =========================================================
+
+  const cameraStreamRef = useRef(null);
+
+  const screenStreamRef = useRef(null);
+
+  const videoRef = useRef(null);
+
+
+  // =========================================================
+  // TOKEN
+  // =========================================================
 
   const token =
     localStorage.getItem("token");
@@ -98,6 +145,7 @@ function StudentTest() {
         );
 
         localStorage.removeItem("token");
+
         localStorage.removeItem("role");
 
         navigate("/login");
@@ -120,225 +168,58 @@ function StudentTest() {
 
 
   // =========================================================
-  // TEXT ANSWER
+  // CAMERA + MICROPHONE
   // =========================================================
 
-  const handleTextAnswer = (
-    questionId,
-    value
-  ) => {
+  const requestCameraAndMicrophone =
+    async () => {
 
-    setAnswers(
-      (previous) => ({
+      try {
 
-        ...previous,
+        setCameraError("");
 
-        [questionId]: value
-
-      })
-    );
-
-  };
-
-
-  // =========================================================
-  // MCQ ANSWER
-  // =========================================================
-
-  const handleMCQAnswer = (
-    questionId,
-    optionId
-  ) => {
-
-    setAnswers(
-      (previous) => ({
-
-        ...previous,
-
-        [questionId]: optionId
-
-      })
-    );
-
-  };
-
-
-  // =========================================================
-  // MSQ ANSWER
-  // =========================================================
-
-  const handleMSQAnswer = (
-    questionId,
-    optionId
-  ) => {
-
-    setAnswers(
-      (previous) => {
-
-        const current =
-          previous[questionId] || [];
-
-
-        if (
-          current.includes(optionId)
-        ) {
-
-          return {
-
-            ...previous,
-
-            [questionId]:
-              current.filter(
-                (id) =>
-                  id !== optionId
-              )
-
-          };
-
-        }
-
-
-        return {
-
-          ...previous,
-
-          [questionId]: [
-
-            ...current,
-
-            optionId
-
-          ]
-
-        };
-
-      }
-    );
-
-  };
-
-
-  // =========================================================
-  // SUBMIT TEST
-  // =========================================================
-
-  const handleSubmit = async () => {
-
-    if (!test) {
-      return;
-    }
-
-
-    // -----------------------------------------
-    // CHECK UNANSWERED QUESTIONS
-    // -----------------------------------------
-
-    const unansweredQuestions =
-      test.questions.filter(
-        (question) => {
-
-          const answer =
-            answers[question.id];
-
-
-          if (
-            test.testType === "MSQ"
-          ) {
-
-            return (
-              !answer ||
-              answer.length === 0
-            );
-
-          }
-
-
-          return (
-            answer === undefined ||
-            answer === ""
+        const stream =
+          await navigator.mediaDevices.getUserMedia(
+            {
+              video: true,
+              audio: true
+            }
           );
 
+
+        cameraStreamRef.current = stream;
+
+
+        // Attach stream to video element
+        if (videoRef.current) {
+
+          videoRef.current.srcObject =
+            stream;
+
         }
-      );
 
 
-    if (
-      unansweredQuestions.length > 0
-    ) {
+        setCameraReady(true);
 
-      const confirmSubmit =
-        window.confirm(
-          `You have ${unansweredQuestions.length} unanswered question(s). Do you want to submit anyway?`
+        setMicrophoneReady(true);
+
+
+        console.log(
+          "Camera and microphone access granted."
         );
 
 
-      if (!confirmSubmit) {
-        return;
-      }
+        // Detect if camera/microphone is stopped
+        stream.getVideoTracks().forEach(
+          (track) => {
 
-    }
+            track.onended = () => {
 
+              setCameraReady(false);
 
-    // -----------------------------------------
-    // SUBMIT
-    // -----------------------------------------
-
-    try {
-
-      setSubmitting(true);
-
-
-      const formattedAnswers =
-        test.questions.map(
-          (question) => {
-
-            const answer =
-              answers[question.id];
-
-
-            // ===============================
-            // MCQ / MSQ
-            // ===============================
-
-            if (
-              test.testType === "MCQ" ||
-              test.testType === "MSQ"
-            ) {
-
-              return {
-
-                questionId:
-                  question.id,
-
-                answer: null,
-
-                selectedOptionIds:
-                  test.testType === "MSQ"
-
-                    ? answer || []
-
-                    : answer
-                      ? [answer]
-                      : []
-
-              };
-
-            }
-
-
-            // ===============================
-            // THEORETICAL / LOGICAL
-            // ===============================
-
-            return {
-
-              questionId:
-                question.id,
-
-              answer:
-                answer || "",
-
-              selectedOptionIds: []
+              setProctoringError(
+                "Camera access was stopped. Please enable your camera again."
+              );
 
             };
 
@@ -346,649 +227,205 @@ function StudentTest() {
         );
 
 
-      console.log(
-        "Submitting answers:",
-        formattedAnswers
-      );
+        stream.getAudioTracks().forEach(
+          (track) => {
 
+            track.onended = () => {
 
-      const response =
-        await api.post(
+              setMicrophoneReady(false);
 
-          `/api/tests/${testId}/submit`,
+              setProctoringError(
+                "Microphone access was stopped."
+              );
 
-          {
-            answers:
-              formattedAnswers
-          },
+            };
 
-          {
-            headers: {
-
-              Authorization:
-                `Bearer ${token}`,
-
-              "Content-Type":
-                "application/json"
-
-            }
           }
-
         );
 
 
-      console.log(
-        "Submit response:",
-        response.data
-      );
-
-
-      // =========================================
-      // GET ATTEMPT ID
-      // =========================================
-
-      const attemptId =
-        response.data.attemptId;
-
-
-      if (!attemptId) {
-
-        alert(
-          "Test submitted, but attempt ID was not returned."
-        );
-
-        return;
-
-      }
-
-
-      // =========================================
-      // GO TO RESULT PAGE
-      // =========================================
-
-      navigate(
-        `/student/result/${attemptId}`
-      );
-
-
-    } catch (error) {
-
-      console.error(
-        "Failed to submit test:",
-        error
-      );
-
-
-      if (
-        error.response?.status === 401
-      ) {
-
-        alert(
-          "Session expired. Please login again."
-        );
-
-        localStorage.removeItem(
-          "token"
-        );
-
-        localStorage.removeItem(
-          "role"
-        );
-
-        navigate("/login");
-
-
-      } else if (
-        error.response?.status === 403
-      ) {
-
-        alert(
-          "You are not allowed to submit this test."
-        );
-
-
-      } else {
+      } catch (error) {
 
         console.error(
-          "Server response:",
-          error.response?.data
+          "Camera/Microphone error:",
+          error
         );
 
 
-        alert(
-          error.response?.data ||
-          "Failed to submit the test."
+        setCameraReady(false);
+
+        setMicrophoneReady(false);
+
+
+        if (
+          error.name === "NotAllowedError"
+        ) {
+
+          setCameraError(
+            "Camera and microphone permission was denied. Please allow access."
+          );
+
+        } else if (
+          error.name === "NotFoundError"
+        ) {
+
+          setCameraError(
+            "Camera or microphone was not found."
+          );
+
+        } else {
+
+          setCameraError(
+            "Unable to access camera and microphone."
+          );
+
+        }
+
+      }
+
+    };
+
+
+  // =========================================================
+  // SCREEN SHARING
+  // =========================================================
+
+  const requestScreenShare =
+    async () => {
+
+      try {
+
+        setScreenError("");
+
+        const stream =
+          await navigator.mediaDevices.getDisplayMedia(
+            {
+              video: true,
+              audio: false
+            }
+          );
+
+
+        screenStreamRef.current = stream;
+
+
+        setScreenReady(true);
+
+
+        console.log(
+          "Screen sharing started."
+        );
+
+
+        const videoTrack =
+          stream.getVideoTracks()[0];
+
+
+        if (videoTrack) {
+
+          videoTrack.onended = () => {
+
+            setScreenReady(false);
+
+            setProctoringError(
+              "Screen sharing was stopped. Please start screen sharing again."
+            );
+
+          };
+
+        }
+
+
+      } catch (error) {
+
+        console.error(
+          "Screen sharing error:",
+          error
+        );
+
+
+        setScreenReady(false);
+
+
+        if (
+          error.name === "NotAllowedError"
+        ) {
+
+          setScreenError(
+            "Screen sharing was cancelled. Please share your screen."
+          );
+
+        } else {
+
+          setScreenError(
+            "Unable to start screen sharing."
+          );
+
+        }
+
+      }
+
+    };
+
+
+  // =========================================================
+  // FULLSCREEN
+  // =========================================================
+
+  const enterFullscreen =
+    async () => {
+
+      try {
+
+        if (!document.fullscreenElement) {
+
+          await document.documentElement.requestFullscreen();
+
+        }
+
+        setFullscreenReady(true);
+
+      } catch (error) {
+
+        console.error(
+          "Fullscreen error:",
+          error
+        );
+
+        setFullscreenReady(false);
+
+        setProctoringError(
+          "Unable to enter fullscreen mode."
         );
 
       }
 
-    } finally {
-
-      setSubmitting(false);
-
-    }
-
-  };
+    };
 
 
   // =========================================================
-  // LOADING
+  // FULLSCREEN CHANGE DETECTION
   // =========================================================
 
-  if (loading) {
+  useEffect(() => {
 
-    return (
+    const handleFullscreenChange =
+      () => {
 
-      <div className="container mt-5 text-center">
+        if (document.fullscreenElement) {
 
-        <div
-          className="spinner-border text-primary"
-          role="status"
-        ></div>
+          setFullscreenReady(true);
 
-        <p className="mt-3">
-          Loading test...
-        </p>
+        } else {
 
-      </div>
+          setFullscreenReady(false);
 
-    );
+        }
 
-  }
+      };
 
 
-  // =========================================================
-  // TEST NOT FOUND
-  // =========================================================
-
-  if (!test) {
-
-    return (
-
-      <div className="container mt-5">
-
-        <div className="alert alert-danger">
-
-          Test not found.
-
-        </div>
-
-
-        <button
-          className="btn btn-primary"
-          onClick={() =>
-            navigate(
-              "/student/dashboard"
-            )
-          }
-        >
-
-          Back to Dashboard
-
-        </button>
-
-      </div>
-
-    );
-
-  }
-
-
-  // =========================================================
-  // UI
-  // =========================================================
-
-  return (
-
-    <div className="min-vh-100 bg-light">
-
-
-      {/* =========================
-          NAVBAR
-      ========================= */}
-
-      <nav className="navbar navbar-dark bg-dark">
-
-        <div className="container">
-
-          <span className="navbar-brand fw-bold">
-
-            Interview Readiness
-
-          </span>
-
-
-          <button
-            className="btn btn-outline-light"
-            onClick={() =>
-              navigate(
-                "/student/dashboard"
-              )
-            }
-          >
-
-            Back to Dashboard
-
-          </button>
-
-        </div>
-
-      </nav>
-
-
-      {/* =========================
-          CONTENT
-      ========================= */}
-
-      <div className="container py-4">
-
-
-        {/* TEST INFORMATION */}
-
-        <div className="card shadow-sm mb-4">
-
-          <div className="card-body">
-
-            <h2 className="fw-bold">
-
-              {test.name}
-
-            </h2>
-
-
-            <div className="row mt-3">
-
-
-              <div className="col-md-3">
-
-                <strong>
-                  Topic
-                </strong>
-
-                <p>
-
-                  {test.topic?.name ||
-                    "N/A"}
-
-                </p>
-
-              </div>
-
-
-              <div className="col-md-3">
-
-                <strong>
-                  Test Type
-                </strong>
-
-                <p>
-                  {test.testType}
-                </p>
-
-              </div>
-
-
-              <div className="col-md-3">
-
-                <strong>
-                  Questions
-                </strong>
-
-                <p>
-                  {test.totalQuestions}
-                </p>
-
-              </div>
-
-
-              <div className="col-md-3">
-
-                <strong>
-                  Total Marks
-                </strong>
-
-                <p>
-                  {test.totalMarks}
-                </p>
-
-              </div>
-
-
-            </div>
-
-          </div>
-
-        </div>
-
-
-        {/* NO QUESTIONS */}
-
-        {test.questions.length === 0 && (
-
-          <div className="alert alert-warning">
-
-            No questions have been added
-            to this test yet.
-
-          </div>
-
-        )}
-
-
-        {/* QUESTIONS */}
-
-        {test.questions.map(
-          (question, index) => (
-
-            <div
-              className="card shadow-sm mb-4"
-              key={question.id}
-            >
-
-              <div className="card-body">
-
-
-                {/* QUESTION HEADER */}
-
-                <div className="d-flex justify-content-between">
-
-                  <h5 className="fw-bold">
-
-                    {index + 1}.{" "}
-
-                    {question.question}
-
-                  </h5>
-
-
-                  <span className="badge bg-primary">
-
-                    {question.marks} Mark
-
-                  </span>
-
-                </div>
-
-
-                <p className="text-muted">
-
-                  Difficulty:{" "}
-
-                  {question.difficulty}
-
-                </p>
-
-
-                {/* =========================
-                    THEORETICAL
-                ========================= */}
-
-                {test.testType ===
-                  "THEORETICAL" && (
-
-                  <textarea
-
-                    className="form-control"
-
-                    rows="4"
-
-                    placeholder=
-                      "Enter your answer..."
-
-                    value={
-                      answers[
-                        question.id
-                      ] || ""
-                    }
-
-                    onChange={
-                      (event) =>
-                        handleTextAnswer(
-                          question.id,
-                          event.target.value
-                        )
-                    }
-
-                  />
-
-                )}
-
-
-                {/* =========================
-                    LOGICAL CODING
-                ========================= */}
-
-                {test.testType ===
-                  "LOGICAL_CODING" && (
-
-                  <textarea
-
-                    className=
-                      "form-control font-monospace"
-
-                    rows="8"
-
-                    placeholder=
-                      "Write your solution/code here..."
-
-                    value={
-                      answers[
-                        question.id
-                      ] || ""
-                    }
-
-                    onChange={
-                      (event) =>
-                        handleTextAnswer(
-                          question.id,
-                          event.target.value
-                        )
-                    }
-
-                  />
-
-                )}
-
-
-                {/* =========================
-                    MCQ
-                ========================= */}
-
-                {test.testType ===
-                  "MCQ" && (
-
-                  <div className="mt-3">
-
-                    {question.options?.map(
-                      (option) => (
-
-                        <div
-                          className=
-                            "form-check mb-2"
-
-                          key={option.id}
-                        >
-
-                          <input
-
-                            className=
-                              "form-check-input"
-
-                            type="radio"
-
-                            name={
-                              `question-${question.id}`
-                            }
-
-                            id={
-                              `option-${option.id}`
-                            }
-
-                            checked={
-                              answers[
-                                question.id
-                              ] === option.id
-                            }
-
-                            onChange={() =>
-                              handleMCQAnswer(
-                                question.id,
-                                option.id
-                              )
-                            }
-
-                          />
-
-
-                          <label
-
-                            className=
-                              "form-check-label"
-
-                            htmlFor={
-                              `option-${option.id}`
-                            }
-
-                          >
-
-                            {option.optionText}
-
-                          </label>
-
-                        </div>
-
-                      )
-                    )}
-
-                  </div>
-
-                )}
-
-
-                {/* =========================
-                    MSQ
-                ========================= */}
-
-                {test.testType ===
-                  "MSQ" && (
-
-                  <div className="mt-3">
-
-                    {question.options?.map(
-                      (option) => {
-
-                        const selected =
-                          answers[
-                            question.id
-                          ] || [];
-
-
-                        return (
-
-                          <div
-                            className=
-                              "form-check mb-2"
-
-                            key={option.id}
-                          >
-
-                            <input
-
-                              className=
-                                "form-check-input"
-
-                              type="checkbox"
-
-                              id={
-                                `option-${option.id}`
-                              }
-
-                              checked={
-                                selected.includes(
-                                  option.id
-                                )
-                              }
-
-                              onChange={() =>
-                                handleMSQAnswer(
-                                  question.id,
-                                  option.id
-                                )
-                              }
-
-                            />
-
-
-                            <label
-
-                              className=
-                                "form-check-label"
-
-                              htmlFor={
-                                `option-${option.id}`
-                              }
-
-                            >
-
-                              {option.optionText}
-
-                            </label>
-
-                          </div>
-
-                        );
-
-                      }
-                    )}
-
-                  </div>
-
-                )}
-
-              </div>
-
-            </div>
-
-          )
-        )}
-
-
-        {/* =========================
-            SUBMIT BUTTON
-        ========================= */}
-
-        {test.questions.length > 0 && (
-
-          <div className="text-center mb-5">
-
-            <button
-
-              className=
-                "btn btn-success btn-lg px-5"
-
-              onClick={handleSubmit}
-
-              disabled={submitting}
-
-            >
-
-              {submitting
-                ? "Submitting..."
-                : "Submit Test"}
-
-            </button>
-
-          </div>
-
-        )}
-
-      </div>
-
-    </div>
-
-  );
-
-}
-
-
-export default StudentTest;
+    document.addEventListener(
+      "fullscreenchange",
+      handleFullscreenC
+```

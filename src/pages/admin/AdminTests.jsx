@@ -18,7 +18,8 @@ function AdminTests() {
   const [formData, setFormData] = useState({
     name: "",
     topicId: "",
-    testType: ""
+    testType: "",
+    durationMinutes: 30
   });
 
   useEffect(() => {
@@ -149,6 +150,13 @@ function AdminTests() {
       return;
     }
 
+    const duration = Number(formData.durationMinutes);
+
+    if (!duration || duration <= 0) {
+      alert("Please enter a valid duration in minutes.");
+      return;
+    }
+
     try {
       const token = getToken();
 
@@ -164,6 +172,8 @@ function AdminTests() {
         totalQuestions: 0,
 
         totalMarks: 0,
+
+        durationMinutes: duration,
 
         questions: []
       };
@@ -188,7 +198,8 @@ function AdminTests() {
       setFormData({
         name: "",
         topicId: "",
-        testType: ""
+        testType: "",
+        durationMinutes: 30
       });
 
       setShowCreateForm(false);
@@ -202,6 +213,77 @@ function AdminTests() {
         alert(error.response.data);
       } else {
         alert("Failed to create test.");
+      }
+    }
+  };
+
+  // =========================================================
+  // UPDATE TEST DURATION
+  // =========================================================
+
+  const handleUpdateDuration = async (test) => {
+    const currentDuration =
+      test.durationMinutes ?? 30;
+
+    const newDuration = window.prompt(
+      `Enter duration for "${test.name}" in minutes:`,
+      currentDuration
+    );
+
+    if (newDuration === null) {
+      return;
+    }
+
+    const duration = Number(newDuration);
+
+    if (!Number.isInteger(duration) || duration <= 0) {
+      alert("Please enter a valid whole number greater than 0.");
+      return;
+    }
+
+    try {
+      const token = getToken();
+
+      const response = await api.put(
+        `/api/admin/tests/${test.id}/duration`,
+        {
+          durationMinutes: duration
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      console.log(
+        "Duration update response:",
+        response.data
+      );
+
+      alert(
+        `Test duration updated to ${duration} minutes.`
+      );
+
+      fetchTests();
+
+    } catch (error) {
+      console.error(
+        "Update duration error:",
+        error
+      );
+
+      if (error.response?.status === 401) {
+        alert("Unauthorized. Please login again.");
+      } else if (error.response?.status === 403) {
+        alert("You don't have permission to update duration.");
+      } else if (
+        typeof error.response?.data === "string"
+      ) {
+        alert(error.response.data);
+      } else {
+        alert("Failed to update test duration.");
       }
     }
   };
@@ -375,7 +457,7 @@ function AdminTests() {
 
                 {/* TEST NAME */}
 
-                <div className="col-md-4">
+                <div className="col-md-3">
 
                   <label className="form-label fw-semibold">
                     Test Name
@@ -394,7 +476,7 @@ function AdminTests() {
 
                 {/* TOPIC */}
 
-                <div className="col-md-4">
+                <div className="col-md-3">
 
                   <label className="form-label fw-semibold">
                     Topic
@@ -437,7 +519,7 @@ function AdminTests() {
 
                 {/* TEST TYPE */}
 
-                <div className="col-md-4">
+                <div className="col-md-3">
 
                   <label className="form-label fw-semibold">
                     Test Type
@@ -471,6 +553,30 @@ function AdminTests() {
                     </option>
 
                   </select>
+
+                </div>
+
+                {/* DURATION */}
+
+                <div className="col-md-3">
+
+                  <label className="form-label fw-semibold">
+                    Duration (Minutes)
+                  </label>
+
+                  <input
+                    type="number"
+                    name="durationMinutes"
+                    className="form-control"
+                    placeholder="Enter duration"
+                    min="1"
+                    value={formData.durationMinutes}
+                    onChange={handleChange}
+                  />
+
+                  <small className="text-muted">
+                    Example: 30 = 30 minutes
+                  </small>
 
                 </div>
 
@@ -529,6 +635,7 @@ function AdminTests() {
                   <th>Test Type</th>
                   <th>Questions</th>
                   <th>Total Marks</th>
+                  <th>Duration</th>
                   <th>Actions</th>
 
                 </tr>
@@ -542,7 +649,7 @@ function AdminTests() {
                   <tr>
 
                     <td
-                      colSpan="7"
+                      colSpan="8"
                       className="text-center text-muted py-5"
                     >
                       No tests found.
@@ -596,9 +703,21 @@ function AdminTests() {
 
                       </td>
 
+                      {/* DURATION */}
+
                       <td>
 
-                        <div className="d-flex gap-2">
+                        <span className="badge bg-warning text-dark">
+                          ⏱ {test.durationMinutes ?? 30} min
+                        </span>
+
+                      </td>
+
+                      {/* ACTIONS */}
+
+                      <td>
+
+                        <div className="d-flex gap-2 flex-wrap">
 
                           <button
                             className="btn btn-sm btn-outline-primary"
@@ -609,6 +728,15 @@ function AdminTests() {
                             }
                           >
                             ⚙ Manage Questions
+                          </button>
+
+                          <button
+                            className="btn btn-sm btn-outline-warning"
+                            onClick={() =>
+                              handleUpdateDuration(test)
+                            }
+                          >
+                            ⏱ Set Time
                           </button>
 
                           <button

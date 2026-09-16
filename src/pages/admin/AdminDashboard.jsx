@@ -1,4 +1,7 @@
-import React, { useEffect, useState } from "react";
+import React, {
+    useEffect,
+    useState
+} from "react";
 
 import {
     PieChart,
@@ -42,15 +45,110 @@ const AdminDashboard = () => {
 
     const loadDashboard = async (isRefresh = false) => {
 
-        if (isRefresh) {
-            setRefreshing(true);
-        } else {
-            setLoading(true);
+        const token =
+            localStorage.getItem("token");
+
+        const role =
+            localStorage.getItem("role");
+
+
+        // =====================================================
+        // CHECK LOGIN SESSION
+        // =====================================================
+
+        console.log(
+            "========== ADMIN DASHBOARD =========="
+        );
+
+        console.log(
+            "Token exists:",
+            !!token
+        );
+
+        console.log(
+            "Role:",
+            role
+        );
+
+
+        if (!token) {
+
+            console.error(
+                "No JWT token found."
+            );
+
+            setError(
+                "Your login session is missing. Please login again."
+            );
+
+            setLoading(false);
+            setRefreshing(false);
+
+            return;
         }
+
+
+        if (role !== "ADMIN") {
+
+            console.error(
+                "Invalid role:",
+                role
+            );
+
+            setError(
+                "You do not have ADMIN access."
+            );
+
+            setLoading(false);
+            setRefreshing(false);
+
+            return;
+        }
+
+
+        // =====================================================
+        // LOADING STATE
+        // =====================================================
+
+        if (isRefresh) {
+
+            setRefreshing(true);
+
+        } else {
+
+            setLoading(true);
+
+        }
+
 
         setError("");
 
+
         let hasError = false;
+
+        let authenticationError = false;
+
+
+        // =====================================================
+        // AUTHORIZATION HEADER
+        // =====================================================
+
+        const authConfig = {
+
+            headers: {
+
+                Authorization:
+                    `Bearer ${token}`
+
+            }
+
+        };
+
+
+        console.log(
+            "Authorization header prepared:",
+            !!authConfig.headers.Authorization
+        );
 
 
         // =====================================================
@@ -59,37 +157,72 @@ const AdminDashboard = () => {
 
         try {
 
+            console.log(
+                "Calling:",
+                "/api/admin/dashboard"
+            );
+
+
             const response =
                 await api.get(
-                    "/api/admin/dashboard"
+                    "/api/admin/dashboard",
+                    authConfig
                 );
 
+
             console.log(
-                "Dashboard API:",
+                "Dashboard API SUCCESS:",
+                response.status,
                 response.data
             );
 
-            // Only update when API succeeds
+
             if (response.data) {
 
                 setDashboard(
                     response.data
                 );
+
             }
 
         } catch (err) {
 
             hasError = true;
 
+
+            const status =
+                err.response?.status;
+
+
             console.error(
-                "Dashboard API Error:",
-                err.response?.status,
-                err.response?.data ||
+                "Dashboard API ERROR"
+            );
+
+            console.error(
+                "Status:",
+                status
+            );
+
+            console.error(
+                "Response:",
+                err.response?.data
+            );
+
+            console.error(
+                "Message:",
                 err.message
             );
 
-            // IMPORTANT:
-            // Do NOT clear existing dashboard data
+
+            if (
+                status === 401 ||
+                status === 403
+            ) {
+
+                authenticationError = true;
+
+            }
+
         }
 
 
@@ -99,37 +232,76 @@ const AdminDashboard = () => {
 
         try {
 
+            console.log(
+                "Calling:",
+                "/api/admin/dashboard/test-performance"
+            );
+
+
             const response =
                 await api.get(
-                    "/api/admin/dashboard/test-performance"
+                    "/api/admin/dashboard/test-performance",
+                    authConfig
                 );
 
+
             console.log(
-                "Test Performance API:",
+                "Test Performance API SUCCESS:",
+                response.status,
                 response.data
             );
 
-            if (Array.isArray(response.data)) {
 
-                // Only update when API succeeds
+            if (
+                Array.isArray(
+                    response.data
+                )
+            ) {
+
                 setTestPerformance(
                     response.data
                 );
+
             }
 
         } catch (err) {
 
             hasError = true;
 
+
+            const status =
+                err.response?.status;
+
+
             console.error(
-                "Test Performance API Error:",
-                err.response?.status,
-                err.response?.data ||
+                "Test Performance API ERROR"
+            );
+
+            console.error(
+                "Status:",
+                status
+            );
+
+            console.error(
+                "Response:",
+                err.response?.data
+            );
+
+            console.error(
+                "Message:",
                 err.message
             );
 
-            // IMPORTANT:
-            // Do NOT clear existing test performance
+
+            if (
+                status === 401 ||
+                status === 403
+            ) {
+
+                authenticationError = true;
+
+            }
+
         }
 
 
@@ -139,37 +311,76 @@ const AdminDashboard = () => {
 
         try {
 
+            console.log(
+                "Calling:",
+                "/api/admin/dashboard/student-performance"
+            );
+
+
             const response =
                 await api.get(
-                    "/api/admin/dashboard/student-performance"
+                    "/api/admin/dashboard/student-performance",
+                    authConfig
                 );
 
+
             console.log(
-                "Student Performance API:",
+                "Student Performance API SUCCESS:",
+                response.status,
                 response.data
             );
 
-            if (Array.isArray(response.data)) {
 
-                // Only update when API succeeds
+            if (
+                Array.isArray(
+                    response.data
+                )
+            ) {
+
                 setStudentPerformance(
                     response.data
                 );
+
             }
 
         } catch (err) {
 
             hasError = true;
 
+
+            const status =
+                err.response?.status;
+
+
             console.error(
-                "Student Performance API Error:",
-                err.response?.status,
-                err.response?.data ||
+                "Student Performance API ERROR"
+            );
+
+            console.error(
+                "Status:",
+                status
+            );
+
+            console.error(
+                "Response:",
+                err.response?.data
+            );
+
+            console.error(
+                "Message:",
                 err.message
             );
 
-            // IMPORTANT:
-            // Do NOT clear existing student performance
+
+            if (
+                status === 401 ||
+                status === 403
+            ) {
+
+                authenticationError = true;
+
+            }
+
         }
 
 
@@ -177,7 +388,13 @@ const AdminDashboard = () => {
         // ERROR MESSAGE
         // =====================================================
 
-        if (hasError) {
+        if (authenticationError) {
+
+            setError(
+                "Admin authorization failed. Please logout and login again with the ADMIN account."
+            );
+
+        } else if (hasError) {
 
             setError(
                 "Some dashboard data could not be refreshed. Existing data is still displayed."
@@ -186,6 +403,7 @@ const AdminDashboard = () => {
         } else {
 
             setError("");
+
         }
 
 
@@ -196,6 +414,7 @@ const AdminDashboard = () => {
         setLoading(false);
 
         setRefreshing(false);
+
     };
 
 
@@ -204,6 +423,41 @@ const AdminDashboard = () => {
     // =========================================================
 
     useEffect(() => {
+
+        const token =
+            localStorage.getItem("token");
+
+        const role =
+            localStorage.getItem("role");
+
+
+        console.log(
+            "AdminDashboard mounted"
+        );
+
+        console.log(
+            "Token exists:",
+            !!token
+        );
+
+        console.log(
+            "Role:",
+            role
+        );
+
+
+        if (
+            !token ||
+            role !== "ADMIN"
+        ) {
+
+            window.location.href =
+                "/login";
+
+            return;
+
+        }
+
 
         loadDashboard(false);
 
@@ -216,13 +470,21 @@ const AdminDashboard = () => {
 
     const handleLogout = () => {
 
-        localStorage.removeItem("token");
+        localStorage.removeItem(
+            "token"
+        );
 
-        localStorage.removeItem("role");
+        localStorage.removeItem(
+            "role"
+        );
 
-        localStorage.removeItem("user");
+        localStorage.removeItem(
+            "user"
+        );
 
-        window.location.href = "/login";
+        window.location.href =
+            "/login";
+
     };
 
 
@@ -247,7 +509,9 @@ const AdminDashboard = () => {
                 </p>
 
             </div>
+
         );
+
     }
 
 
@@ -260,25 +524,30 @@ const AdminDashboard = () => {
             dashboard?.totalStudents ?? 0
         );
 
+
     const totalTests =
         Number(
             dashboard?.totalTests ?? 0
         );
+
 
     const totalAssignments =
         Number(
             dashboard?.totalAssignments ?? 0
         );
 
+
     const completedTests =
         Number(
             dashboard?.completedTests ?? 0
         );
 
+
     const passedTests =
         Number(
             dashboard?.passedTests ?? 0
         );
+
 
     const failedTests =
         Number(
@@ -329,45 +598,66 @@ const AdminDashboard = () => {
 
     let overallAverage = 0;
 
+
     const testsWithScores =
         testPerformance.filter(
             test =>
-                Number(test.totalMarks ?? 0) > 0 &&
-                Number(test.completedStudents ?? 0) > 0
+                Number(
+                    test.totalMarks ?? 0
+                ) > 0 &&
+                Number(
+                    test.completedStudents ?? 0
+                ) > 0
         );
 
 
-    if (testsWithScores.length > 0) {
+    if (
+        testsWithScores.length > 0
+    ) {
 
         let totalPercentage = 0;
 
-        testsWithScores.forEach(test => {
 
-            const averageScore =
-                Number(
-                    test.averageScore ?? 0
-                );
+        testsWithScores.forEach(
+            test => {
 
-            const totalMarks =
-                Number(
-                    test.totalMarks ?? 0
-                );
+                const averageScore =
+                    Number(
+                        test.averageScore ?? 0
+                    );
 
-            if (totalMarks > 0) {
 
-                const percentage =
-                    (
-                        averageScore * 100
-                    ) / totalMarks;
+                const totalMarks =
+                    Number(
+                        test.totalMarks ?? 0
+                    );
 
-                totalPercentage += percentage;
+
+                if (
+                    totalMarks > 0
+                ) {
+
+                    const percentage =
+                        (
+                            averageScore *
+                            100
+                        ) /
+                        totalMarks;
+
+
+                    totalPercentage +=
+                        percentage;
+
+                }
+
             }
-        });
+        );
 
 
         overallAverage =
             totalPercentage /
             testsWithScores.length;
+
     }
 
 
@@ -383,8 +673,10 @@ const AdminDashboard = () => {
     const passRate =
         resultCount > 0
             ? (
-                totalPassed * 100
-            ) / resultCount
+                totalPassed *
+                100
+            ) /
+            resultCount
             : 0;
 
 
@@ -443,7 +735,8 @@ const AdminDashboard = () => {
                         student.averageScore ?? 0
                     ),
                 0
-            ) / studentPerformance.length
+            ) /
+            studentPerformance.length
             : 0;
 
 
@@ -528,22 +821,31 @@ const AdminDashboard = () => {
 
                     <button
                         className="btn btn-outline-primary"
-                        onClick={() => loadDashboard(true)}
+                        onClick={() =>
+                            loadDashboard(true)
+                        }
                         disabled={refreshing}
                     >
 
                         {refreshing ? (
+
                             <>
+
                                 <span
                                     className="spinner-border spinner-border-sm me-2"
                                     role="status"
                                 />
+
                                 Refreshing...
+
                             </>
+
                         ) : (
+
                             <>
                                 🔄 Refresh
                             </>
+
                         )}
 
                     </button>
@@ -573,7 +875,9 @@ const AdminDashboard = () => {
 
                     <button
                         className="btn btn-sm btn-outline-primary ms-3"
-                        onClick={() => loadDashboard(true)}
+                        onClick={() =>
+                            loadDashboard(true)
+                        }
                         disabled={refreshing}
                     >
                         Retry
@@ -826,7 +1130,10 @@ const AdminDashboard = () => {
                                         >
 
                                             {pieData.map(
-                                                (entry, index) => (
+                                                (
+                                                    entry,
+                                                    index
+                                                ) => (
 
                                                     <Cell
                                                         key={
@@ -990,10 +1297,12 @@ const AdminDashboard = () => {
                                                     test.totalMarks ?? 0
                                                 );
 
+
                                             const averageScore =
                                                 Number(
                                                     test.averageScore ?? 0
                                                 );
+
 
                                             const percentage =
                                                 totalMarks > 0
@@ -1019,12 +1328,14 @@ const AdminDashboard = () => {
                                                         }
                                                     </td>
 
+
                                                     <td>
                                                         {
                                                             test.totalStudents ??
                                                             0
                                                         }
                                                     </td>
+
 
                                                     <td>
                                                         {
@@ -1033,6 +1344,7 @@ const AdminDashboard = () => {
                                                         }
                                                     </td>
 
+
                                                     <td className="text-success">
                                                         {
                                                             test.passedStudents ??
@@ -1040,12 +1352,14 @@ const AdminDashboard = () => {
                                                         }
                                                     </td>
 
+
                                                     <td className="text-danger">
                                                         {
                                                             test.failedStudents ??
                                                             0
                                                         }
                                                     </td>
+
 
                                                     <td>
 
@@ -1062,6 +1376,7 @@ const AdminDashboard = () => {
                                                         }
 
                                                     </td>
+
 
                                                     <td
                                                         style={{
@@ -1296,7 +1611,10 @@ const AdminDashboard = () => {
                                 ) : (
 
                                     studentPerformance.map(
-                                        (student, index) => (
+                                        (
+                                            student,
+                                            index
+                                        ) => (
 
                                             <tr
                                                 key={
@@ -1308,17 +1626,20 @@ const AdminDashboard = () => {
                                                     {index + 1}
                                                 </td>
 
+
                                                 <td className="fw-semibold">
                                                     {
                                                         student.studentName
                                                     }
                                                 </td>
 
+
                                                 <td>
                                                     {
                                                         student.studentEmail
                                                     }
                                                 </td>
+
 
                                                 <td>
                                                     {
@@ -1327,12 +1648,14 @@ const AdminDashboard = () => {
                                                     }
                                                 </td>
 
+
                                                 <td>
                                                     {
                                                         student.testsCompleted ??
                                                         0
                                                     }
                                                 </td>
+
 
                                                 <td className="text-success fw-semibold">
                                                     {
@@ -1341,12 +1664,14 @@ const AdminDashboard = () => {
                                                     }
                                                 </td>
 
+
                                                 <td className="text-danger fw-semibold">
                                                     {
                                                         student.testsFailed ??
                                                         0
                                                     }
                                                 </td>
+
 
                                                 <td>
 
@@ -1377,7 +1702,9 @@ const AdminDashboard = () => {
             </div>
 
         </div>
+
     );
+
 };
 
 

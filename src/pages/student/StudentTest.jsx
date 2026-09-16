@@ -1,3 +1,4 @@
+
 import {
   useEffect,
   useRef,
@@ -160,6 +161,7 @@ function StudentTest() {
         return;
       }
 
+
       const response =
         await api.get(
           `/api/student/tests/${testId}`,
@@ -171,10 +173,12 @@ function StudentTest() {
           }
         );
 
+
       console.log(
         "Test response:",
         response.data
       );
+
 
       setTest(response.data);
 
@@ -184,6 +188,7 @@ function StudentTest() {
         "Failed to load test:",
         error
       );
+
 
       if (
         error.response?.status === 401 ||
@@ -216,6 +221,26 @@ function StudentTest() {
 
 
   // =========================================================
+  // GET TEST DURATION
+  // =========================================================
+
+  const getTestDuration = () => {
+
+    const duration =
+      Number(test?.durationMinutes);
+
+    if (
+      Number.isFinite(duration) &&
+      duration > 0
+    ) {
+      return duration;
+    }
+
+    return 30;
+  };
+
+
+  // =========================================================
   // FORMAT TIMER
   // =========================================================
 
@@ -229,11 +254,13 @@ function StudentTest() {
       return "00:00";
     }
 
+
     const minutes =
       Math.floor(seconds / 60);
 
     const remainingSeconds =
       seconds % 60;
+
 
     return (
       String(minutes).padStart(2, "0") +
@@ -250,19 +277,33 @@ function StudentTest() {
   const startTimer = (expiryTime) => {
 
     if (!expiryTime) {
+
+      console.error(
+        "Timer cannot start because expiresAt is missing."
+      );
+
+      setProctoringError(
+        "Unable to start the timer. Please try again."
+      );
+
       return;
     }
+
 
     setExpiresAt(expiryTime);
 
     timerExpiredRef.current = false;
+
 
     if (timerRef.current) {
 
       clearInterval(
         timerRef.current
       );
+
+      timerRef.current = null;
     }
+
 
     const calculateRemaining = () => {
 
@@ -272,6 +313,7 @@ function StudentTest() {
       const now =
         Date.now();
 
+
       const remaining =
         Math.max(
           0,
@@ -280,13 +322,21 @@ function StudentTest() {
           )
         );
 
+
       setTimeLeft(remaining);
+
 
       if (remaining <= 0) {
 
-        clearInterval(
-          timerRef.current
-        );
+        if (timerRef.current) {
+
+          clearInterval(
+            timerRef.current
+          );
+
+          timerRef.current = null;
+        }
+
 
         if (
           !timerExpiredRef.current &&
@@ -295,16 +345,20 @@ function StudentTest() {
 
           timerExpiredRef.current = true;
 
+
           alert(
             "⏰ Time is over. Your test will be submitted automatically."
           );
+
 
           handleSubmit(true);
         }
       }
     };
 
+
     calculateRemaining();
+
 
     timerRef.current =
       setInterval(
@@ -328,8 +382,8 @@ function StudentTest() {
           timerRef.current
         );
 
+        timerRef.current = null;
       }
-
     };
 
   }, []);
@@ -346,6 +400,7 @@ function StudentTest() {
 
         setCameraError("");
 
+
         const stream =
           await navigator.mediaDevices.getUserMedia(
             {
@@ -354,19 +409,22 @@ function StudentTest() {
             }
           );
 
+
         cameraStreamRef.current =
           stream;
+
 
         if (videoRef.current) {
 
           videoRef.current.srcObject =
             stream;
-
         }
+
 
         setCameraReady(true);
 
         setMicrophoneReady(true);
+
 
         stream
           .getVideoTracks()
@@ -375,6 +433,7 @@ function StudentTest() {
             track.onended = () => {
 
               setCameraReady(false);
+
 
               if (
                 proctoringStarted &&
@@ -386,12 +445,14 @@ function StudentTest() {
                 );
               }
 
+
               setProctoringError(
                 "Camera access was stopped. Please enable your camera again."
               );
             };
 
           });
+
 
         stream
           .getAudioTracks()
@@ -400,6 +461,7 @@ function StudentTest() {
             track.onended = () => {
 
               setMicrophoneReady(false);
+
 
               if (
                 proctoringStarted &&
@@ -410,6 +472,7 @@ function StudentTest() {
                   "Microphone access was stopped"
                 );
               }
+
 
               setProctoringError(
                 "Microphone access was stopped."
@@ -425,9 +488,11 @@ function StudentTest() {
           error
         );
 
+
         setCameraReady(false);
 
         setMicrophoneReady(false);
+
 
         if (
           error.name ===
@@ -468,6 +533,7 @@ function StudentTest() {
 
         setScreenError("");
 
+
         const stream =
           await navigator.mediaDevices.getDisplayMedia(
             {
@@ -476,19 +542,24 @@ function StudentTest() {
             }
           );
 
+
         screenStreamRef.current =
           stream;
 
+
         setScreenReady(true);
+
 
         const videoTrack =
           stream.getVideoTracks()[0];
+
 
         if (videoTrack) {
 
           videoTrack.onended = () => {
 
             setScreenReady(false);
+
 
             if (
               proctoringStarted &&
@@ -499,6 +570,7 @@ function StudentTest() {
                 "Screen sharing was stopped"
               );
             }
+
 
             setProctoringError(
               "Screen sharing was stopped. Please start screen sharing again."
@@ -513,7 +585,9 @@ function StudentTest() {
           error
         );
 
+
         setScreenReady(false);
+
 
         if (
           error.name ===
@@ -558,7 +632,9 @@ function StudentTest() {
           error
         );
 
+
         setFullscreenReady(false);
+
 
         setProctoringError(
           "Unable to enter fullscreen mode."
@@ -578,19 +654,24 @@ function StudentTest() {
         return;
       }
 
+
       if (isSubmittingRef.current) {
         return;
       }
 
+
       const currentAttemptId =
         attemptIdRef.current;
+
 
       if (!currentAttemptId) {
         return;
       }
 
+
       const timestamp =
         new Date().toLocaleTimeString();
+
 
       const violation = {
 
@@ -603,6 +684,7 @@ function StudentTest() {
         timestamp
       };
 
+
       setViolations(
         (previous) => [
           ...previous,
@@ -610,16 +692,20 @@ function StudentTest() {
         ]
       );
 
+
       setViolationCount(
         (previous) =>
           previous + 1
       );
 
+
       setLastViolation(reason);
+
 
       setProctoringError(
         `⚠️ Violation detected: ${reason}`
       );
+
 
       try {
 
@@ -666,11 +752,13 @@ function StudentTest() {
         autoSubmittingRef.current =
           true;
 
+
         setTimeout(() => {
 
           alert(
             "Maximum number of proctoring violations reached. Your test will be submitted automatically."
           );
+
 
           handleSubmit(true);
 
@@ -684,6 +772,7 @@ function StudentTest() {
     if (!proctoringStarted) {
       return;
     }
+
 
     checkViolationLimit(
       violationCount
@@ -705,6 +794,7 @@ function StudentTest() {
       return;
     }
 
+
     const handleVisibilityChange =
       () => {
 
@@ -716,6 +806,7 @@ function StudentTest() {
           const now =
             Date.now();
 
+
           if (
             now -
             lastFocusViolationRef.current >
@@ -724,6 +815,7 @@ function StudentTest() {
 
             lastFocusViolationRef.current =
               now;
+
 
             registerViolation(
               "Browser tab/window was switched"
@@ -741,8 +833,10 @@ function StudentTest() {
         return;
       }
 
+
       const now =
         Date.now();
+
 
       if (
         now -
@@ -752,6 +846,7 @@ function StudentTest() {
 
         lastFocusViolationRef.current =
           now;
+
 
         registerViolation(
           "Test window lost focus"
@@ -765,6 +860,7 @@ function StudentTest() {
       handleVisibilityChange
     );
 
+
     window.addEventListener(
       "blur",
       handleBlur
@@ -777,6 +873,7 @@ function StudentTest() {
         "visibilitychange",
         handleVisibilityChange
       );
+
 
       window.removeEventListener(
         "blur",
@@ -797,6 +894,7 @@ function StudentTest() {
       return;
     }
 
+
     const handleFullscreenChange =
       () => {
 
@@ -809,6 +907,7 @@ function StudentTest() {
         } else {
 
           setFullscreenReady(false);
+
 
           if (
             !isSubmittingRef.current
@@ -850,10 +949,12 @@ function StudentTest() {
       return;
     }
 
+
     const handleCopy =
       (event) => {
 
         event.preventDefault();
+
 
         registerViolation(
           "Copy operation was attempted"
@@ -889,10 +990,12 @@ function StudentTest() {
       return;
     }
 
+
     const handlePaste =
       (event) => {
 
         event.preventDefault();
+
 
         registerViolation(
           "Paste operation was attempted"
@@ -928,10 +1031,12 @@ function StudentTest() {
       return;
     }
 
+
     const handleCut =
       (event) => {
 
         event.preventDefault();
+
 
         registerViolation(
           "Cut operation was attempted"
@@ -967,10 +1072,12 @@ function StudentTest() {
       return;
     }
 
+
     const handleContextMenu =
       (event) => {
 
         event.preventDefault();
+
 
         registerViolation(
           "Right-click was attempted"
@@ -1006,6 +1113,7 @@ function StudentTest() {
       return;
     }
 
+
     const handleKeyDown =
       (event) => {
 
@@ -1013,9 +1121,11 @@ function StudentTest() {
 
           event.preventDefault();
 
+
           registerViolation(
             "Developer tools shortcut F12 was attempted"
           );
+
 
           return;
         }
@@ -1029,9 +1139,11 @@ function StudentTest() {
 
           event.preventDefault();
 
+
           registerViolation(
             "Developer tools shortcut Ctrl+Shift+I was attempted"
           );
+
 
           return;
         }
@@ -1045,9 +1157,11 @@ function StudentTest() {
 
           event.preventDefault();
 
+
           registerViolation(
             "Developer tools shortcut Ctrl+Shift+J was attempted"
           );
+
 
           return;
         }
@@ -1060,9 +1174,11 @@ function StudentTest() {
 
           event.preventDefault();
 
+
           registerViolation(
             "View-source shortcut Ctrl+U was attempted"
           );
+
 
           return;
         }
@@ -1075,9 +1191,11 @@ function StudentTest() {
 
           event.preventDefault();
 
+
           registerViolation(
             "Copy shortcut Ctrl+C was attempted"
           );
+
 
           return;
         }
@@ -1090,9 +1208,11 @@ function StudentTest() {
 
           event.preventDefault();
 
+
           registerViolation(
             "Paste shortcut Ctrl+V was attempted"
           );
+
 
           return;
         }
@@ -1105,9 +1225,11 @@ function StudentTest() {
 
           event.preventDefault();
 
+
           registerViolation(
             "Cut shortcut Ctrl+X was attempted"
           );
+
 
           return;
         }
@@ -1142,15 +1264,18 @@ function StudentTest() {
       return;
     }
 
+
     const checkCamera =
       setInterval(() => {
 
         const stream =
           cameraStreamRef.current;
 
+
         if (!stream) {
           return;
         }
+
 
         const videoTracks =
           stream.getVideoTracks();
@@ -1204,18 +1329,22 @@ function StudentTest() {
       return;
     }
 
+
     const checkScreenShare =
       setInterval(() => {
 
         const stream =
           screenStreamRef.current;
 
+
         if (!stream) {
           return;
         }
 
+
         const tracks =
           stream.getVideoTracks();
+
 
         if (
           tracks.length === 0 ||
@@ -1248,6 +1377,7 @@ function StudentTest() {
     async () => {
 
       setProctoringError("");
+
 
       if (!cameraReady) {
 
@@ -1291,6 +1421,7 @@ function StudentTest() {
             "Fullscreen error:",
             error
           );
+
 
           setProctoringError(
             "Please allow fullscreen mode before starting the test."
@@ -1351,6 +1482,26 @@ function StudentTest() {
 
 
         // =================================================
+        // CHECK EXPIRES AT
+        // =================================================
+
+        if (!data.expiresAt) {
+
+          console.error(
+            "Backend did not return expiresAt:",
+            data
+          );
+
+
+          setProctoringError(
+            "Unable to start the test timer. Please try again."
+          );
+
+          return;
+        }
+
+
+        // =================================================
         // UPDATE TEST DATA
         // =================================================
 
@@ -1376,6 +1527,18 @@ function StudentTest() {
             totalMarks:
               data.totalMarks,
 
+            /*
+             * Keep the duration returned by the
+             * original test if available.
+             *
+             * If the backend start response later
+             * includes durationMinutes, use that.
+             */
+            durationMinutes:
+              data.durationMinutes ??
+              previous?.durationMinutes ??
+              30,
+
             questions:
               data.questions || []
           })
@@ -1389,6 +1552,7 @@ function StudentTest() {
         setAttemptId(
           newAttemptId
         );
+
 
         attemptIdRef.current =
           newAttemptId;
@@ -1428,15 +1592,19 @@ function StudentTest() {
             "Session expired. Please login again."
           );
 
+
           localStorage.removeItem(
             "token"
           );
+
 
           localStorage.removeItem(
             "role"
           );
 
+
           navigate("/login");
+
 
           return;
         }
@@ -1450,6 +1618,7 @@ function StudentTest() {
             "You are not allowed to start this test."
           );
 
+
           return;
         }
 
@@ -1461,6 +1630,7 @@ function StudentTest() {
           setProctoringError(
             "This test time has already expired."
           );
+
 
           return;
         }
@@ -1493,6 +1663,7 @@ function StudentTest() {
 
           });
 
+
         cameraStreamRef.current =
           null;
       }
@@ -1509,6 +1680,7 @@ function StudentTest() {
             track.stop();
 
           });
+
 
         screenStreamRef.current =
           null;
@@ -1527,13 +1699,17 @@ function StudentTest() {
       isSubmittingRef.current =
         true;
 
+
       stopMediaStreams();
+
 
       if (timerRef.current) {
 
         clearInterval(
           timerRef.current
         );
+
+        timerRef.current = null;
       }
     };
 
@@ -1652,6 +1828,11 @@ function StudentTest() {
       }
 
 
+      if (isSubmittingRef.current) {
+        return;
+      }
+
+
       if (submitting) {
         return;
       }
@@ -1727,6 +1908,7 @@ function StudentTest() {
       isSubmittingRef.current =
         true;
 
+
       setSubmitting(true);
 
 
@@ -1737,6 +1919,8 @@ function StudentTest() {
         clearInterval(
           timerRef.current
         );
+
+        timerRef.current = null;
       }
 
 
@@ -1902,13 +2086,16 @@ function StudentTest() {
             "Session expired. Please login again."
           );
 
+
           localStorage.removeItem(
             "token"
           );
 
+
           localStorage.removeItem(
             "role"
           );
+
 
           navigate("/login");
 
@@ -1930,7 +2117,9 @@ function StudentTest() {
             "The test time has expired."
           );
 
+
           stopMediaStreams();
+
 
           navigate(
             `/student/result/${attemptIdRef.current}`
@@ -1943,6 +2132,7 @@ function StudentTest() {
             error.response?.data ||
             "Failed to submit the test."
           );
+
 
           isSubmittingRef.current =
             false;
@@ -2012,6 +2202,14 @@ function StudentTest() {
       </div>
     );
   }
+
+
+  // =========================================================
+  // DYNAMIC TEST DURATION
+  // =========================================================
+
+  const testDuration =
+    getTestDuration();
 
 
   // =========================================================
@@ -2095,7 +2293,7 @@ function StudentTest() {
                       Time Limit:
                     </strong>{" "}
 
-                    30 Minutes
+                    {testDuration} Minutes
 
                   </div>
 
@@ -2419,7 +2617,7 @@ function StudentTest() {
                     <ul className="mb-0 mt-2">
 
                       <li>
-                        Test duration is 30 minutes.
+                        Test duration is {testDuration} minutes.
                       </li>
 
                       <li>
@@ -2549,6 +2747,7 @@ function StudentTest() {
             >
 
               ⚠️ Violations:{" "}
+
               {violationCount}/{MAX_VIOLATIONS}
 
             </span>
@@ -2572,7 +2771,9 @@ function StudentTest() {
             <div className="alert alert-danger text-center fw-bold">
 
               ⏰ Only{" "}
+
               {formatTime(timeLeft)}
+
               {" "}remaining!
 
             </div>
@@ -2655,6 +2856,7 @@ function StudentTest() {
               >
 
                 ⏱️{" "}
+
                 {formatTime(timeLeft)}
 
               </div>
@@ -3210,3 +3412,4 @@ function StudentTest() {
 
 
 export default StudentTest;
+

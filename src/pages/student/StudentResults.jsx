@@ -18,8 +18,6 @@ function StudentResults() {
 
       const response = await api.get("/api/student/results");
 
-      console.log("Student Results Response:", response.data);
-
       setResults(
         Array.isArray(response.data)
           ? response.data
@@ -228,13 +226,23 @@ function StudentResults() {
 
                     {results.map((result, index) => {
 
-                      const attemptId = result.id;
+                      // Backend returns flat fields (attemptId, testName);
+                      // older shapes (id, test.name) are still supported.
+                      const attemptId =
+                        result.attemptId ?? result.id;
 
                       const studentName =
+                        result.studentName ||
                         result.student?.name ||
                         "Student";
 
+                      const studentEmail =
+                        result.studentEmail ||
+                        result.student?.email ||
+                        "";
+
                       const testName =
+                        result.testName ||
                         result.test?.name ||
                         "Test";
 
@@ -252,9 +260,19 @@ function StudentResults() {
                       const status =
                         result.status || "UNKNOWN";
 
+                      const underReview =
+                        status === "PENDING_REVIEW";
+
+                      const progressClass =
+                        underReview
+                          ? "bg-warning"
+                          : percentage >= 40
+                            ? "bg-success"
+                            : "bg-danger";
+
                       return (
 
-                        <tr key={attemptId}>
+                        <tr key={attemptId ?? index}>
 
                           <td>
                             {index + 1}
@@ -267,9 +285,9 @@ function StudentResults() {
                               {studentName}
                             </strong>
 
-                            {result.student?.email && (
+                            {studentEmail && (
                               <small className="d-block text-muted">
-                                {result.student.email}
+                                {studentEmail}
                               </small>
                             )}
                           </td>
@@ -286,6 +304,11 @@ function StudentResults() {
 
                           <td>
                             {score}
+                            {underReview && (
+                              <small className="d-block text-muted">
+                                provisional
+                              </small>
+                            )}
                           </td>
 
                           {/* TOTAL MARKS */}
@@ -313,11 +336,7 @@ function StudentResults() {
                               >
 
                                 <div
-                                  className={`progress-bar ${
-                                    percentage >= 40
-                                      ? "bg-success"
-                                      : "bg-danger"
-                                  }`}
+                                  className={`progress-bar ${progressClass}`}
                                   role="progressbar"
                                   style={{
                                     width: `${Math.min(
@@ -349,9 +368,15 @@ function StudentResults() {
                                 FAILED
                               </span>
 
-                            ) : (
+                            ) : underReview ? (
 
                               <span className="badge bg-warning text-dark">
+                                UNDER REVIEW
+                              </span>
+
+                            ) : (
+
+                              <span className="badge bg-secondary">
                                 {status}
                               </span>
 
@@ -368,6 +393,7 @@ function StudentResults() {
                               onClick={() =>
                                 handleResult(attemptId)
                               }
+                              disabled={attemptId == null}
                             >
                               View Result
                             </button>

@@ -21,11 +21,6 @@ function AdminResults() {
 
       const response = await api.get("/api/attempts");
 
-      console.log(
-        "Admin Results Response:",
-        response.data
-      );
-
       setResults(
         Array.isArray(response.data)
           ? response.data
@@ -134,6 +129,16 @@ function AdminResults() {
 
     }
 
+    if (status === "PENDING_REVIEW") {
+
+      return (
+        <span className="badge bg-warning text-dark">
+          UNDER REVIEW
+        </span>
+      );
+
+    }
+
     if (status === "COMPLETED") {
 
       return (
@@ -145,7 +150,7 @@ function AdminResults() {
     }
 
     return (
-      <span className="badge bg-warning text-dark">
+      <span className="badge bg-secondary">
         {status || "UNKNOWN"}
       </span>
     );
@@ -358,6 +363,14 @@ function AdminResults() {
                       "UNKNOWN";
 
 
+                    const progressClass =
+                      status === "PENDING_REVIEW"
+                        ? "bg-warning"
+                        : percentage >= 40
+                          ? "bg-success"
+                          : "bg-danger";
+
+
                     return (
 
                       <tr key={attemptId}>
@@ -428,6 +441,14 @@ function AdminResults() {
 
                           {totalMarks}
 
+                          {status === "PENDING_REVIEW" && (
+
+                            <small className="d-block text-muted">
+                              provisional
+                            </small>
+
+                          )}
+
                         </td>
 
 
@@ -450,11 +471,7 @@ function AdminResults() {
                             >
 
                               <div
-                                className={`progress-bar ${
-                                  percentage >= 40
-                                    ? "bg-success"
-                                    : "bg-danger"
-                                }`}
+                                className={`progress-bar ${progressClass}`}
                                 role="progressbar"
                                 style={{
                                   width: `${Math.min(

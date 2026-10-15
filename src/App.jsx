@@ -23,6 +23,7 @@ import AdminQuestions from "./pages/admin/AdminQuestions";
 import ManageTestQuestions from "./pages/admin/ManageTestQuestions";
 import AdminAssignTests from "./pages/admin/AdminAssignTests";
 import AdminResults from "./pages/admin/AdminResults";
+import AdminGrading from "./pages/admin/AdminGrading";
 import AdminPerformance from "./pages/admin/AdminPerformance";
 import AdminStudentPerformance from "./pages/admin/AdminStudentPerformance";
 import Topics from "./pages/admin/Topics";
@@ -174,6 +175,16 @@ function App() {
           <Route
             path="results"
             element={<AdminResults />}
+          />
+
+
+          {/* =========================================
+              ADMIN GRADING
+          ========================================= */}
+
+          <Route
+            path="grading"
+            element={<AdminGrading />}
           />
 
         </Route>

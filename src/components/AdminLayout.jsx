@@ -97,6 +97,16 @@ function AdminLayout() {
           </Link>
 
 
+          {/* IMPORT QUESTIONS */}
+
+          <Link
+            to="/admin/questions/import"
+            className="nav-link text-white mb-2"
+          >
+            📥 Import Questions
+          </Link>
+
+
           {/* ASSIGN TESTS */}
 
           <Link

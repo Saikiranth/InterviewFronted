@@ -18,6 +18,7 @@ import Register from "./pages/Register";
 
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import AdminStudents from "./pages/admin/AdminStudents";
+import AdminUsers from "./pages/admin/AdminUsers";
 import AdminTests from "./pages/admin/AdminTests";
 import AdminQuestions from "./pages/admin/AdminQuestions";
 import ManageTestQuestions from "./pages/admin/ManageTestQuestions";
@@ -115,6 +116,16 @@ function App() {
           <Route
             path="students"
             element={<AdminStudents />}
+          />
+
+
+          {/* =========================================
+              ADMIN USERS
+          ========================================= */}
+
+          <Route
+            path="users"
+            element={<AdminUsers />}
           />
 
 

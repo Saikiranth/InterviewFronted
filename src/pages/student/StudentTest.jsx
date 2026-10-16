@@ -210,6 +210,9 @@ function StudentTest() {
           error.response?.data ||
           "Failed to load test."
         );
+
+        // e.g. "This test is not open yet" (409): back to the dashboard
+        navigate("/student/dashboard");
       }
 
     } finally {

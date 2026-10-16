@@ -21,6 +21,7 @@ import AdminStudents from "./pages/admin/AdminStudents";
 import AdminUsers from "./pages/admin/AdminUsers";
 import AdminTests from "./pages/admin/AdminTests";
 import AdminQuestions from "./pages/admin/AdminQuestions";
+import AdminQuestionImport from "./pages/admin/AdminQuestionImport";
 import ManageTestQuestions from "./pages/admin/ManageTestQuestions";
 import AdminAssignTests from "./pages/admin/AdminAssignTests";
 import AdminResults from "./pages/admin/AdminResults";
@@ -166,6 +167,16 @@ function App() {
           <Route
             path="questions"
             element={<AdminQuestions />}
+          />
+
+
+          {/* =========================================
+              IMPORT QUESTIONS (CSV / EXCEL)
+          ========================================= */}
+
+          <Route
+            path="questions/import"
+            element={<AdminQuestionImport />}
           />
 
 

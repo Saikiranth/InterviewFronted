@@ -1,905 +1,1151 @@
-package com.interviewreadiness.interview_readiness.controller;
+import {
+  useEffect,
+  useState
+} from "react";
 
-import java.util.ArrayList;
-import java.util.List;
+import {
+  useNavigate,
+  useParams
+} from "react-router-dom";
 
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import api from "../../services/api";
 
-import com.interviewreadiness.interview_readiness.entity.Question;
-import com.interviewreadiness.interview_readiness.entity.QuestionOption;
-import com.interviewreadiness.interview_readiness.entity.TestAnswer;
-import com.interviewreadiness.interview_readiness.entity.TestAttempt;
-import com.interviewreadiness.interview_readiness.repository.QuestionOptionRepository;
-import com.interviewreadiness.interview_readiness.repository.TestAnswerRepository;
-import com.interviewreadiness.interview_readiness.repository.TestAttemptRepository;
 
-@RestController
-@RequestMapping("/api/attempts")
-public class TestAttemptController {
+function StudentResult() {
 
-    private final TestAttemptRepository testAttemptRepository;
-    private final TestAnswerRepository testAnswerRepository;
-    private final QuestionOptionRepository questionOptionRepository;
+  const navigate = useNavigate();
 
-    public TestAttemptController(
-            TestAttemptRepository testAttemptRepository,
-            TestAnswerRepository testAnswerRepository,
-            QuestionOptionRepository questionOptionRepository) {
+  const { attemptId } = useParams();
 
-        this.testAttemptRepository = testAttemptRepository;
-        this.testAnswerRepository = testAnswerRepository;
-        this.questionOptionRepository = questionOptionRepository;
+  const [result, setResult] = useState(null);
+
+  const [loading, setLoading] = useState(true);
+
+  const [error, setError] = useState("");
+
+
+  // =========================================================
+  // FETCH DETAILED RESULT
+  // =========================================================
+
+  useEffect(() => {
+
+    fetchResult();
+
+  }, [attemptId]);
+
+
+  const fetchResult = async () => {
+
+    try {
+
+      setLoading(true);
+
+      setError("");
+
+
+      if (!attemptId) {
+
+        setError("Invalid attempt ID.");
+
+        return;
+
+      }
+
+
+      const response = await api.get(
+        `/api/attempts/${attemptId}/result`
+      );
+
+
+      setResult(response.data);
+
+
+    } catch (error) {
+
+      console.error(
+        "Failed to load result:",
+        error
+      );
+
+
+      if (
+        error.response?.status === 401
+      ) {
+
+        localStorage.removeItem("token");
+
+        localStorage.removeItem("role");
+
+        localStorage.removeItem("user");
+
+        setError(
+          "Session expired. Please login again."
+        );
+
+
+      } else if (
+        error.response?.status === 403
+      ) {
+
+        setError(
+          "You are not allowed to view this result."
+        );
+
+
+      } else if (
+        error.response?.status === 404
+      ) {
+
+        setError(
+          "Result not found."
+        );
+
+
+      } else {
+
+        setError(
+          "Failed to load result."
+        );
+
+      }
+
+    } finally {
+
+      setLoading(false);
+
     }
 
-    // =============================================================
-    // GET ATTEMPTS BY STUDENT
-    // =============================================================
+  };
 
-    @GetMapping("/student/{studentId}")
-    public ResponseEntity<?> getAttemptsByStudent(
-            @PathVariable Long studentId) {
 
-        try {
+  // =========================================================
+  // LOGOUT
+  // =========================================================
 
-            List<TestAttempt> attempts =
-                    testAttemptRepository.findByStudentId(studentId);
+  const handleLogout = () => {
 
-            return ResponseEntity.ok(attempts);
+    localStorage.removeItem("token");
 
-        } catch (Exception e) {
+    localStorage.removeItem("role");
 
-            e.printStackTrace();
+    localStorage.removeItem("user");
 
-            return ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error fetching student attempts");
-        }
+    navigate("/login");
+
+  };
+
+
+  // =========================================================
+  // CONVERT STUDENT ANSWER INTO OPTION IDS
+  // =========================================================
+
+  const getSelectedOptionIds = (studentAnswer) => {
+
+    if (!studentAnswer) {
+      return [];
     }
 
-    // =============================================================
-    // GET SINGLE ATTEMPT
-    // =============================================================
 
-    @GetMapping("/{attemptId}")
-    public ResponseEntity<?> getAttempt(
-            @PathVariable Long attemptId) {
+    // If backend stores something like:
+    // [1,2]
+    // ["1","2"]
+    // 1,2
 
-        TestAttempt attempt =
-                testAttemptRepository
-                        .findById(attemptId)
-                        .orElse(null);
+    let value = String(studentAnswer).trim();
 
-        if (attempt == null) {
 
-            return ResponseEntity
-                    .status(HttpStatus.NOT_FOUND)
-                    .body("Attempt not found");
-        }
-
-        return ResponseEntity.ok(attempt);
+    if (!value) {
+      return [];
     }
 
-    // =============================================================
-    // GET DETAILED RESULT
-    // =============================================================
 
-    @GetMapping("/{attemptId}/result")
-    public ResponseEntity<?> getDetailedResult(
-            @PathVariable Long attemptId) {
+    // Remove square brackets
 
-        try {
+    value = value
+      .replace(/^\[/, "")
+      .replace(/\]$/, "");
 
-            // -----------------------------------------------------
-            // FIND ATTEMPT
-            // -----------------------------------------------------
 
-            TestAttempt attempt =
-                    testAttemptRepository
-                            .findById(attemptId)
-                            .orElse(null);
+    // Remove quotes
 
-            if (attempt == null) {
+    value = value.replace(/"/g, "");
 
-                return ResponseEntity
-                        .status(HttpStatus.NOT_FOUND)
-                        .body("Attempt not found");
-            }
+    value = value.replace(/'/g, "");
 
-            // -----------------------------------------------------
-            // FIND ANSWERS
-            // -----------------------------------------------------
 
-            List<TestAnswer> answers =
-                    testAnswerRepository.findByAttempt(attempt);
+    return value
+      .split(",")
+      .map((id) => id.trim())
+      .filter((id) => id !== "");
 
-            // -----------------------------------------------------
-            // CREATE RESULT RESPONSE
-            // -----------------------------------------------------
+  };
 
-            DetailedResultResponse response =
-                    new DetailedResultResponse();
 
-            response.setAttemptId(attempt.getId());
+  // =========================================================
+  // CHECK WHETHER OPTION WAS SELECTED
+  // =========================================================
 
-            response.setScore(
-                    attempt.getScore() == null
-                            ? 0
-                            : attempt.getScore()
-            );
+  const isOptionSelected = (
+    studentAnswer,
+    optionId
+  ) => {
 
-            response.setTotalMarks(
-                    attempt.getTotalMarks() == null
-                            ? 0
-                            : attempt.getTotalMarks()
-            );
+    const selectedIds =
+      getSelectedOptionIds(studentAnswer);
 
-            response.setStatus(
-                    attempt.getStatus()
-            );
 
-            // -----------------------------------------------------
-            // STUDENT INFORMATION
-            // -----------------------------------------------------
+    return selectedIds.includes(
+      String(optionId)
+    );
 
-            if (attempt.getStudent() != null) {
+  };
 
-                response.setStudentId(
-                        attempt.getStudent().getId()
-                );
 
-                response.setStudentName(
-                        attempt.getStudent().getName()
-                );
+  // =========================================================
+  // GET TEST TYPE
+  // =========================================================
 
-                response.setStudentEmail(
-                        attempt.getStudent().getEmail()
-                );
-            }
+  const getTestType = (answer) => {
 
-            // -----------------------------------------------------
-            // TEST INFORMATION
-            // -----------------------------------------------------
+    return String(
+      answer?.testType || ""
+    ).toUpperCase();
 
-            if (attempt.getTest() != null) {
+  };
 
-                response.setTestId(
-                        attempt.getTest().getId()
-                );
 
-                response.setTestName(
-                        attempt.getTest().getName()
-                );
-            }
+  // =========================================================
+  // ANSWER STATE (pending review / correct / partial / wrong)
+  // =========================================================
 
-            // -----------------------------------------------------
-            // PERCENTAGE
-            // -----------------------------------------------------
+  const getAnswerState = (answer) => {
 
-            double percentage = 0;
+    const pending =
+      answer?.gradingStatus === "PENDING_REVIEW";
 
-            if (response.getTotalMarks() > 0) {
+    if (pending) {
 
-                percentage =
-                        ((double) response.getScore()
-                                / response.getTotalMarks()) * 100;
-            }
+      return {
+        pending: true,
+        label: "Under review",
+        badge: "badge bg-warning text-dark ms-3",
+        box: "border border-warning rounded p-3 bg-warning-subtle",
+        text: "text-warning-emphasis fw-bold fs-5"
+      };
 
-            response.setPercentage(percentage);
+    }
 
-            // -----------------------------------------------------
-            // ANSWER DETAILS
-            // -----------------------------------------------------
+    const marks = Number(answer?.marks ?? 0);
 
-            List<AnswerDetailResponse> answerDetails =
-                    new ArrayList<>();
+    const maxMarks = Number(answer?.maxMarks ?? 0);
 
-            if (answers != null) {
+    if (answer?.correct) {
 
-                for (TestAnswer testAnswer : answers) {
+      return {
+        pending: false,
+        label: "Correct",
+        badge: "badge bg-success ms-3",
+        box: "border border-success rounded p-3 bg-success-subtle",
+        text: "text-success fw-bold fs-5"
+      };
 
-                    if (testAnswer == null ||
-                            testAnswer.getQuestion() == null) {
+    }
 
-                        continue;
-                    }
+    if (marks > 0 && marks < maxMarks) {
 
-                    Question question =
-                            testAnswer.getQuestion();
+      return {
+        pending: false,
+        label: "Partial",
+        badge: "badge bg-info text-dark ms-3",
+        box: "border border-info rounded p-3 bg-info-subtle",
+        text: "text-info-emphasis fw-bold fs-5"
+      };
 
-                    AnswerDetailResponse detail =
-                            new AnswerDetailResponse();
+    }
 
-                    detail.setAnswerId(
-                            testAnswer.getId()
-                    );
+    return {
+      pending: false,
+      label: "Incorrect",
+      badge: "badge bg-danger ms-3",
+      box: "border border-danger rounded p-3 bg-danger-subtle",
+      text: "text-danger fw-bold fs-5"
+    };
 
-                    detail.setQuestionId(
-                            question.getId()
-                    );
+  };
 
-                    detail.setQuestion(
-                            question.getQuestion()
-                    );
 
-                    detail.setDifficulty(
-                            question.getDifficulty()
-                    );
+  // =========================================================
+  // LOADING
+  // =========================================================
 
-                    detail.setMarks(
-                            testAnswer.getMarks() == null
-                                    ? 0
-                                    : testAnswer.getMarks()
-                    );
+  if (loading) {
 
-                    detail.setMaxMarks(
-                            question.getMarks() == null
-                                    ? 0
-                                    : question.getMarks()
-                    );
+    return (
 
-                    // -------------------------------------------------
-                    // MCQ OPTIONS
-                    // -------------------------------------------------
+      <div className="min-vh-100 bg-light">
 
-                    List<QuestionOption> options =
-                            questionOptionRepository
-                                    .findByQuestionId(
-                                            question.getId()
-                                    );
+        <nav className="navbar navbar-dark bg-dark">
 
-                    List<OptionResponse> optionResponses =
-                            new ArrayList<>();
+          <div className="container">
 
-                    if (options != null) {
+            <span className="navbar-brand fw-bold">
+              Interview Readiness
+            </span>
 
-                        for (QuestionOption option : options) {
+          </div>
 
-                            OptionResponse optionResponse =
-                                    new OptionResponse();
+        </nav>
 
-                            optionResponse.setId(
-                                    option.getId()
-                            );
 
-                            optionResponse.setOptionText(
-                                    option.getOptionText()
-                            );
+        <div className="container mt-5 text-center">
 
-                            optionResponse.setCorrect(
-                                    option.isCorrect()
-                            );
+          <div
+            className="spinner-border text-primary"
+            role="status"
+          ></div>
 
-                            optionResponses.add(
-                                    optionResponse
-                            );
-                        }
-                    }
 
-                    detail.setOptions(optionResponses);
+          <p className="mt-3">
+            Loading result...
+          </p>
 
-                    // -------------------------------------------------
-                    // STUDENT ANSWER
-                    // -------------------------------------------------
+        </div>
 
-                    String studentAnswer =
-                            convertAnswerIdsToText(
-                                    testAnswer.getStudentAnswer(),
-                                    options
-                            );
+      </div>
 
-                    detail.setStudentAnswer(
-                            studentAnswer
-                    );
+    );
 
-                    // -------------------------------------------------
-                    // CORRECT ANSWER
-                    // -------------------------------------------------
+  }
 
-                    String correctAnswer =
-                            question.getAnswer();
 
-                    String convertedCorrectAnswer =
-                            convertAnswerIdsToText(
-                                    correctAnswer,
-                                    options
-                            );
+  // =========================================================
+  // ERROR
+  // =========================================================
 
-                    detail.setCorrectAnswer(
-                            convertedCorrectAnswer
-                    );
+  if (error) {
 
-                    // -------------------------------------------------
-                    // CORRECT / INCORRECT
-                    // -------------------------------------------------
+    return (
 
-                    boolean correct = false;
+      <div className="min-vh-100 bg-light">
 
-                    if (testAnswer.getMarks() != null &&
-                            question.getMarks() != null &&
-                            question.getMarks() > 0) {
+        <nav className="navbar navbar-dark bg-dark">
 
-                        correct =
-                                testAnswer.getMarks()
-                                        .equals(question.getMarks());
-                    }
+          <div className="container">
 
-                    detail.setCorrect(correct);
+            <span className="navbar-brand fw-bold">
+              Interview Readiness
+            </span>
 
-                    // -------------------------------------------------
-                    // GRADING STATUS / FEEDBACK
-                    // -------------------------------------------------
 
-                    detail.setGradingStatus(
-                            testAnswer.getGradingStatus() == null
-                                    ? "AUTO_GRADED"
-                                    : testAnswer.getGradingStatus()
-                    );
+            <button
+              className="btn btn-outline-light"
+              onClick={() =>
+                navigate(
+                  "/student/dashboard"
+                )
+              }
+            >
+              Dashboard
+            </button>
 
-                    detail.setFeedback(
-                            testAnswer.getFeedback()
-                    );
+          </div>
 
-                    answerDetails.add(detail);
+        </nav>
+
+
+        <div className="container mt-5">
+
+          <div className="alert alert-danger">
+            {error}
+          </div>
+
+
+          {error.includes(
+            "Session expired"
+          ) ? (
+
+            <button
+              className="btn btn-primary"
+              onClick={() =>
+                navigate("/login")
+              }
+            >
+              Login Again
+            </button>
+
+          ) : (
+
+            <button
+              className="btn btn-primary"
+              onClick={() =>
+                navigate(
+                  "/student/dashboard"
+                )
+              }
+            >
+              Back to Dashboard
+            </button>
+
+          )}
+
+        </div>
+
+      </div>
+
+    );
+
+  }
+
+
+  // =========================================================
+  // NO RESULT
+  // =========================================================
+
+  if (!result) {
+
+    return (
+
+      <div className="container mt-5">
+
+        <div className="alert alert-warning">
+
+          Result information is not available.
+
+        </div>
+
+
+        <button
+          className="btn btn-primary"
+          onClick={() =>
+            navigate(
+              "/student/dashboard"
+            )
+          }
+        >
+          Back to Dashboard
+        </button>
+
+      </div>
+
+    );
+
+  }
+
+
+  // =========================================================
+  // RESULT DATA
+  // =========================================================
+
+  const studentName =
+    result.studentName ||
+    "Student";
+
+
+  const studentEmail =
+    result.studentEmail ||
+    "";
+
+
+  const testName =
+    result.testName ||
+    "Test";
+
+
+  const score =
+    Number(result.score ?? 0);
+
+
+  const totalMarks =
+    Number(result.totalMarks ?? 0);
+
+
+  const percentage =
+    Number(result.percentage ?? 0);
+
+
+  const status =
+    result.status ||
+    "UNKNOWN";
+
+
+  const normalizedStatus =
+    String(status).toUpperCase();
+
+
+  const passed =
+    normalizedStatus === "PASSED";
+
+
+  const underReview =
+    normalizedStatus === "PENDING_REVIEW";
+
+
+  const statusBadgeClass =
+    passed
+      ? "badge bg-success fs-5 px-4 py-2"
+      : underReview
+        ? "badge bg-warning text-dark fs-5 px-4 py-2"
+        : "badge bg-danger fs-5 px-4 py-2";
+
+
+  const statusLabel =
+    underReview
+      ? "UNDER REVIEW"
+      : status;
+
+
+  const answers =
+    Array.isArray(result.answers)
+      ? result.answers
+      : [];
+
+
+  // =========================================================
+  // UI
+  // =========================================================
+
+  return (
+
+    <div className="min-vh-100 bg-light">
+
+
+      {/* =====================================================
+          NAVBAR
+      ===================================================== */}
+
+      <nav className="navbar navbar-dark bg-dark">
+
+        <div className="container">
+
+          <span className="navbar-brand fw-bold">
+
+            Interview Readiness
+
+          </span>
+
+
+          <div className="d-flex gap-2">
+
+            <button
+              className="btn btn-outline-light"
+              onClick={() =>
+                navigate(
+                  "/student/dashboard"
+                )
+              }
+            >
+              Dashboard
+            </button>
+
+
+            <button
+              className="btn btn-outline-light"
+              onClick={handleLogout}
+            >
+              Logout
+            </button>
+
+          </div>
+
+        </div>
+
+      </nav>
+
+
+      {/* =====================================================
+          CONTENT
+      ===================================================== */}
+
+      <div className="container py-5">
+
+
+        {/* ===================================================
+            SUMMARY
+        =================================================== */}
+
+        <div className="card shadow border-0 mb-4">
+
+          <div className="card-body text-center p-5">
+
+
+            <h3 className="fw-bold text-primary mb-1">
+
+              {studentName}
+
+            </h3>
+
+
+            {studentEmail && (
+
+              <p className="text-muted">
+
+                {studentEmail}
+
+              </p>
+
+            )}
+
+
+            <h2 className="fw-bold mb-3">
+
+              Test Result
+
+            </h2>
+
+
+            <h4 className="mb-4">
+
+              {testName}
+
+            </h4>
+
+
+            <div className="mb-4">
+
+              <span className={statusBadgeClass}>
+
+                {statusLabel}
+
+              </span>
+
+            </div>
+
+
+            {underReview && (
+
+              <div className="alert alert-warning text-start">
+
+                Some of your answers are being reviewed by an
+                admin. The score below is provisional and the
+                final result (Passed / Failed) will appear once
+                the review is complete.
+
+              </div>
+
+            )}
+
+
+            {/* SCORE */}
+
+            <h1 className="display-3 fw-bold">
+
+              {score}
+
+              <span className="fs-3 text-muted">
+
+                {" "} / {totalMarks}
+
+              </span>
+
+            </h1>
+
+
+            <p className="text-muted">
+
+              {underReview ? "Provisional Score" : "Score"}
+
+            </p>
+
+
+            <div className="row g-3 mt-3">
+
+
+              <div className="col-md-6">
+
+                <div className="card bg-light border-0">
+
+                  <div className="card-body">
+
+                    <h6 className="text-muted">
+
+                      Percentage
+
+                    </h6>
+
+
+                    <h3 className="fw-bold">
+
+                      {percentage.toFixed(2)}%
+
+                    </h3>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+
+              <div className="col-md-6">
+
+                <div className="card bg-light border-0">
+
+                  <div className="card-body">
+
+                    <h6 className="text-muted">
+
+                      Attempt ID
+
+                    </h6>
+
+
+                    <h3 className="fw-bold">
+
+                      {attemptId}
+
+                    </h3>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        {/* ===================================================
+            ANSWER REVIEW
+        =================================================== */}
+
+        <div className="card shadow border-0">
+
+          <div className="card-body p-4">
+
+            <h3 className="fw-bold mb-4">
+
+              Answer Review
+
+            </h3>
+
+
+            {answers.length === 0 ? (
+
+              <div className="alert alert-info">
+
+                No answers were submitted for this attempt.
+
+              </div>
+
+            ) : (
+
+              answers.map(
+                (answer, index) => {
+
+                  const testType =
+                    getTestType(answer);
+
+
+                  const isObjective =
+                    testType === "MCQ" ||
+                    testType === "MSQ";
+
+
+                  const state =
+                    getAnswerState(answer);
+
+
+                  return (
+
+                    <div
+                      key={
+                        answer.answerId ||
+                        answer.questionId ||
+                        index
+                      }
+                      className="card border mb-4"
+                    >
+
+                      <div className="card-body">
+
+
+                        {/* =================================
+                            QUESTION HEADER
+                        ================================= */}
+
+                        <div className="d-flex justify-content-between align-items-start mb-3">
+
+                          <div>
+
+                            <h5 className="fw-bold mb-1">
+
+                              {index + 1}.{" "}
+
+                              {answer.question}
+
+                            </h5>
+
+
+                            {testType && (
+
+                              <span className="badge bg-secondary">
+
+                                {testType}
+
+                              </span>
+
+                            )}
+
+                          </div>
+
+
+                          <span className={state.badge}>
+
+                            {state.label}
+
+                          </span>
+
+                        </div>
+
+
+                        {/* =================================
+                            DIFFICULTY
+                        ================================= */}
+
+                        {answer.difficulty && (
+
+                          <p className="text-muted">
+
+                            Difficulty:{" "}
+
+                            <strong>
+                              {answer.difficulty}
+                            </strong>
+
+                          </p>
+
+                        )}
+
+
+                        {/* =================================
+                            MCQ / MSQ OPTIONS
+                        ================================= */}
+
+                        {isObjective &&
+                          answer.options &&
+                          answer.options.length > 0 && (
+
+                          <div className="mb-4">
+
+                            <h6 className="fw-bold mb-3">
+
+                              Options
+
+                            </h6>
+
+
+                            {answer.options.map(
+                              (option) => {
+
+                                const selected =
+                                  isOptionSelected(
+                                    answer.studentAnswer,
+                                    option.id
+                                  );
+
+
+                                const correct =
+                                  Boolean(
+                                    option.correct
+                                  );
+
+
+                                let optionClass =
+                                  "border rounded p-3 mb-2";
+
+
+                                if (
+                                  selected &&
+                                  correct
+                                ) {
+
+                                  optionClass +=
+                                    " border-success bg-success-subtle";
+
+                                } else if (
+                                  selected &&
+                                  !correct
+                                ) {
+
+                                  optionClass +=
+                                    " border-danger bg-danger-subtle";
+
+                                } else if (
+                                  !selected &&
+                                  correct
+                                ) {
+
+                                  optionClass +=
+                                    " border-success bg-success-subtle";
+
+                                }
+
+
+                                return (
+
+                                  <div
+                                    key={option.id}
+                                    className={optionClass}
+                                  >
+
+                                    <div className="d-flex justify-content-between align-items-center">
+
+                                      <span className="fw-semibold">
+
+                                        {option.optionText}
+
+                                      </span>
+
+
+                                      <div className="d-flex gap-2">
+
+                                        {selected && (
+
+                                          <span
+                                            className={
+                                              correct
+                                                ? "badge bg-success"
+                                                : "badge bg-danger"
+                                            }
+                                          >
+
+                                            {correct
+                                              ? "Your Answer ✓"
+                                              : "Your Answer ✗"}
+
+                                          </span>
+
+                                        )}
+
+
+                                        {correct && (
+
+                                          <span className="badge bg-success">
+
+                                            Correct Answer
+
+                                          </span>
+
+                                        )}
+
+                                      </div>
+
+                                    </div>
+
+
+                                  </div>
+
+                                );
+
+                              }
+                            )}
+
+                          </div>
+
+                        )}
+
+
+                        {/* =================================
+                            OBJECTIVE ANSWER SUMMARY
+                        ================================= */}
+
+                        {isObjective && (
+
+                          <div className="mb-3">
+
+                            <h6 className="fw-bold">
+
+                              Your Selected Answer
+
+                            </h6>
+
+
+                            <div className={state.box}>
+
+                              {answer.studentAnswer
+                                ? answer.studentAnswer
+                                : "No answer submitted"}
+
+                            </div>
+
+                          </div>
+
+                        )}
+
+
+                        {/* =================================
+                            THEORETICAL / CODING / LOGICAL
+                        ================================= */}
+
+                        {!isObjective && (
+
+                          <>
+
+                            <div className="mb-3">
+
+                              <h6 className="fw-bold">
+
+                                Your Answer
+
+                              </h6>
+
+
+                              <div
+                                className={state.box}
+                                style={{
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word"
+                                }}
+                              >
+
+                                {answer.studentAnswer
+                                  ? answer.studentAnswer
+                                  : "No answer submitted"}
+
+                              </div>
+
+                            </div>
+
+
+                            <div className="mb-3">
+
+                              <h6 className="fw-bold">
+
+                                Correct / Expected Answer
+
+                              </h6>
+
+
+                              <div
+                                className="border border-success rounded p-3 bg-success-subtle"
+                                style={{
+                                  whiteSpace: "pre-wrap",
+                                  wordBreak: "break-word"
+                                }}
+                              >
+
+                                {answer.correctAnswer
+                                  ? answer.correctAnswer
+                                  : "Not available"}
+
+                              </div>
+
+                            </div>
+
+                          </>
+
+                        )}
+
+
+                        {/* =================================
+                            REVIEWER FEEDBACK
+                        ================================= */}
+
+                        {answer.feedback && (
+
+                          <div className="mb-3">
+
+                            <h6 className="fw-bold">
+
+                              Reviewer Feedback
+
+                            </h6>
+
+
+                            <div
+                              className="border border-primary rounded p-3 bg-primary-subtle"
+                              style={{
+                                whiteSpace: "pre-wrap",
+                                wordBreak: "break-word"
+                              }}
+                            >
+
+                              {answer.feedback}
+
+                            </div>
+
+                          </div>
+
+                        )}
+
+
+                        {/* =================================
+                            MARKS
+                        ================================= */}
+
+                        <div className="d-flex justify-content-between align-items-center border-top pt-3">
+
+                          <span className="fw-bold">
+
+                            {state.pending
+                              ? "Marks (provisional)"
+                              : "Marks"}
+
+                          </span>
+
+
+                          <span className={state.text}>
+
+                            {answer.marks}
+
+                            {" / "}
+
+                            {answer.maxMarks}
+
+                          </span>
+
+                        </div>
+
+                      </div>
+
+                    </div>
+
+                  );
+
                 }
+              )
+
+            )}
+
+          </div>
+
+        </div>
+
+
+        {/* ===================================================
+            BACK BUTTON
+        =================================================== */}
+
+        <div className="text-center mt-4">
+
+          <button
+            className="btn btn-primary btn-lg px-5"
+            onClick={() =>
+              navigate(
+                "/student/results"
+              )
             }
+          >
 
-            response.setAnswers(answerDetails);
+            Back to Results
 
-            return ResponseEntity.ok(response);
+          </button>
 
-        } catch (Exception e) {
+        </div>
 
-            e.printStackTrace();
 
-            return ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(
-                            "Error fetching detailed result: "
-                                    + e.getMessage()
-                    );
-        }
-    }
+      </div>
 
-    // =============================================================
-    // CONVERT OPTION IDs TO OPTION TEXT
-    // =============================================================
+    </div>
 
-    private String convertAnswerIdsToText(
-            String answer,
-            List<QuestionOption> options) {
+  );
 
-        if (answer == null ||
-                answer.trim().isEmpty() ||
-                options == null ||
-                options.isEmpty()) {
-
-            return answer;
-        }
-
-        String value = answer.trim();
-
-        // ---------------------------------------------------------
-        // Handle multiple selected options
-        //
-        // Examples:
-        // "45,48"
-        // "[45,48]"
-        // "[45, 48]"
-        // ---------------------------------------------------------
-
-        value = value
-                .replace("[", "")
-                .replace("]", "");
-
-        String[] selectedIds =
-                value.split(",");
-
-        List<String> answerTexts =
-                new ArrayList<>();
-
-        for (String selectedId : selectedIds) {
-
-            String idValue =
-                    selectedId.trim();
-
-            if (idValue.isEmpty()) {
-                continue;
-            }
-
-            try {
-
-                Long optionId =
-                        Long.parseLong(idValue);
-
-                boolean found = false;
-
-                for (QuestionOption option : options) {
-
-                    if (option.getId() != null &&
-                            option.getId().equals(optionId)) {
-
-                        answerTexts.add(
-                                option.getOptionText()
-                        );
-
-                        found = true;
-                        break;
-                    }
-                }
-
-                // -------------------------------------------------
-                // If ID doesn't match an option,
-                // keep the original value.
-                // -------------------------------------------------
-
-                if (!found) {
-
-                    answerTexts.add(idValue);
-                }
-
-            } catch (NumberFormatException e) {
-
-                // -------------------------------------------------
-                // This is probably already normal text.
-                // Example:
-                // "String"
-                // "Compilation error"
-                // -------------------------------------------------
-
-                answerTexts.add(idValue);
-            }
-        }
-
-        if (answerTexts.isEmpty()) {
-
-            return answer;
-        }
-
-        return String.join(", ", answerTexts);
-    }
-
-    // =============================================================
-    // GET ALL ATTEMPTS
-    // =============================================================
-
-    @GetMapping
-    public ResponseEntity<?> getAllAttempts() {
-
-        try {
-
-            List<TestAttempt> attempts =
-                    testAttemptRepository.findAll();
-
-            return ResponseEntity.ok(attempts);
-
-        } catch (Exception e) {
-
-            e.printStackTrace();
-
-            return ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body("Error fetching attempts");
-        }
-    }
-
-    // =============================================================
-    // CALCULATE SCORE
-    // =============================================================
-
-    @PutMapping("/{attemptId}/calculate-score")
-    public ResponseEntity<?> calculateScore(
-            @PathVariable Long attemptId) {
-
-        try {
-
-            TestAttempt attempt =
-                    testAttemptRepository
-                            .findById(attemptId)
-                            .orElse(null);
-
-            if (attempt == null) {
-
-                return ResponseEntity
-                        .status(HttpStatus.NOT_FOUND)
-                        .body("Attempt not found");
-            }
-
-            List<TestAnswer> answers =
-                    testAnswerRepository
-                            .findByAttempt(attempt);
-
-            int totalScore = 0;
-
-            if (answers != null) {
-
-                for (TestAnswer answer : answers) {
-
-                    if (answer != null &&
-                            answer.getMarks() != null) {
-
-                        totalScore += answer.getMarks();
-                    }
-                }
-            }
-
-            int totalMarks =
-                    attempt.getTotalMarks() == null
-                            ? 0
-                            : attempt.getTotalMarks();
-
-            if (totalScore > totalMarks) {
-                totalScore = totalMarks;
-            }
-
-            if (totalScore < 0) {
-                totalScore = 0;
-            }
-
-            attempt.setScore(totalScore);
-
-            double percentage = 0;
-
-            if (totalMarks > 0) {
-
-                percentage =
-                        ((double) totalScore /
-                                totalMarks) * 100;
-            }
-
-            boolean hasPendingReview = false;
-
-            if (answers != null) {
-                for (TestAnswer a : answers) {
-                    if (a != null &&
-                            "PENDING_REVIEW".equals(a.getGradingStatus())) {
-                        hasPendingReview = true;
-                        break;
-                    }
-                }
-            }
-
-            if (hasPendingReview) {
-                attempt.setStatus("PENDING_REVIEW");
-            } else if (percentage >= 40.0) {
-                attempt.setStatus("PASSED");
-            } else {
-                attempt.setStatus("FAILED");
-            }
-
-            TestAttempt savedAttempt =
-                    testAttemptRepository.save(attempt);
-
-            return ResponseEntity.ok(
-                    new CalculateScoreResponse(
-                            savedAttempt.getId(),
-                            totalScore,
-                            totalMarks,
-                            percentage,
-                            savedAttempt.getStatus()
-                    )
-            );
-
-        } catch (Exception e) {
-
-            e.printStackTrace();
-
-            return ResponseEntity
-                    .status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(
-                            "Error calculating score: "
-                                    + e.getMessage()
-                    );
-        }
-    }
-
-    // =============================================================
-    // DETAILED RESULT DTO
-    // =============================================================
-
-    public static class DetailedResultResponse {
-
-        private Long attemptId;
-        private Long studentId;
-        private String studentName;
-        private String studentEmail;
-        private Long testId;
-        private String testName;
-        private int score;
-        private int totalMarks;
-        private double percentage;
-        private String status;
-        private List<AnswerDetailResponse> answers;
-
-        public Long getAttemptId() {
-            return attemptId;
-        }
-
-        public void setAttemptId(Long attemptId) {
-            this.attemptId = attemptId;
-        }
-
-        public Long getStudentId() {
-            return studentId;
-        }
-
-        public void setStudentId(Long studentId) {
-            this.studentId = studentId;
-        }
-
-        public String getStudentName() {
-            return studentName;
-        }
-
-        public void setStudentName(String studentName) {
-            this.studentName = studentName;
-        }
-
-        public String getStudentEmail() {
-            return studentEmail;
-        }
-
-        public void setStudentEmail(String studentEmail) {
-            this.studentEmail = studentEmail;
-        }
-
-        public Long getTestId() {
-            return testId;
-        }
-
-        public void setTestId(Long testId) {
-            this.testId = testId;
-        }
-
-        public String getTestName() {
-            return testName;
-        }
-
-        public void setTestName(String testName) {
-            this.testName = testName;
-        }
-
-        public int getScore() {
-            return score;
-        }
-
-        public void setScore(int score) {
-            this.score = score;
-        }
-
-        public int getTotalMarks() {
-            return totalMarks;
-        }
-
-        public void setTotalMarks(int totalMarks) {
-            this.totalMarks = totalMarks;
-        }
-
-        public double getPercentage() {
-            return percentage;
-        }
-
-        public void setPercentage(double percentage) {
-            this.percentage = percentage;
-        }
-
-        public String getStatus() {
-            return status;
-        }
-
-        public void setStatus(String status) {
-            this.status = status;
-        }
-
-        public List<AnswerDetailResponse> getAnswers() {
-            return answers;
-        }
-
-        public void setAnswers(
-                List<AnswerDetailResponse> answers) {
-
-            this.answers = answers;
-        }
-    }
-
-    // =============================================================
-    // ANSWER DETAIL DTO
-    // =============================================================
-
-    public static class AnswerDetailResponse {
-
-        private Long answerId;
-        private Long questionId;
-        private String question;
-        private String studentAnswer;
-        private String correctAnswer;
-        private String difficulty;
-        private int marks;
-        private int maxMarks;
-        private boolean correct;
-        private String gradingStatus;
-        private String feedback;
-        private List<OptionResponse> options;
-
-        public Long getAnswerId() {
-            return answerId;
-        }
-
-        public void setAnswerId(Long answerId) {
-            this.answerId = answerId;
-        }
-
-        public Long getQuestionId() {
-            return questionId;
-        }
-
-        public void setQuestionId(Long questionId) {
-            this.questionId = questionId;
-        }
-
-        public String getQuestion() {
-            return question;
-        }
-
-        public void setQuestion(String question) {
-            this.question = question;
-        }
-
-        public String getStudentAnswer() {
-            return studentAnswer;
-        }
-
-        public void setStudentAnswer(String studentAnswer) {
-            this.studentAnswer = studentAnswer;
-        }
-
-        public String getCorrectAnswer() {
-            return correctAnswer;
-        }
-
-        public void setCorrectAnswer(String correctAnswer) {
-            this.correctAnswer = correctAnswer;
-        }
-
-        public String getDifficulty() {
-            return difficulty;
-        }
-
-        public void setDifficulty(String difficulty) {
-            this.difficulty = difficulty;
-        }
-
-        public int getMarks() {
-            return marks;
-        }
-
-        public void setMarks(int marks) {
-            this.marks = marks;
-        }
-
-        public int getMaxMarks() {
-            return maxMarks;
-        }
-
-        public void setMaxMarks(int maxMarks) {
-            this.maxMarks = maxMarks;
-        }
-
-        public boolean isCorrect() {
-            return correct;
-        }
-
-        public void setCorrect(boolean correct) {
-            this.correct = correct;
-        }
-
-        public String getGradingStatus() {
-            return gradingStatus;
-        }
-
-        public void setGradingStatus(String gradingStatus) {
-            this.gradingStatus = gradingStatus;
-        }
-
-        public String getFeedback() {
-            return feedback;
-        }
-
-        public void setFeedback(String feedback) {
-            this.feedback = feedback;
-        }
-
-        public List<OptionResponse> getOptions() {
-            return options;
-        }
-
-        public void setOptions(
-                List<OptionResponse> options) {
-
-            this.options = options;
-        }
-    }
-
-    // =============================================================
-    // OPTION DTO
-    // =============================================================
-
-    public static class OptionResponse {
-
-        private Long id;
-        private String optionText;
-        private boolean correct;
-
-        public Long getId() {
-            return id;
-        }
-
-        public void setId(Long id) {
-            this.id = id;
-        }
-
-        public String getOptionText() {
-            return optionText;
-        }
-
-        public void setOptionText(String optionText) {
-            this.optionText = optionText;
-        }
-
-        public boolean isCorrect() {
-            return correct;
-        }
-
-        public void setCorrect(boolean correct) {
-            this.correct = correct;
-        }
-    }
-
-    // =============================================================
-    // CALCULATE SCORE RESPONSE
-    // =============================================================
-
-    public static class CalculateScoreResponse {
-
-        private Long attemptId;
-        private int score;
-        private int totalMarks;
-        private double percentage;
-        private String status;
-
-        public CalculateScoreResponse(
-                Long attemptId,
-                int score,
-                int totalMarks,
-                double percentage,
-                String status) {
-
-            this.attemptId = attemptId;
-            this.score = score;
-            this.totalMarks = totalMarks;
-            this.percentage = percentage;
-            this.status = status;
-        }
-
-        public Long getAttemptId() {
-            return attemptId;
-        }
-
-        public int getScore() {
-            return score;
-        }
-
-        public int getTotalMarks() {
-            return totalMarks;
-        }
-
-        public double getPercentage() {
-            return percentage;
-        }
-
-        public String getStatus() {
-            return status;
-        }
-    }
 }
+
+
+export default StudentResult;

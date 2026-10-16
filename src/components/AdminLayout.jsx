@@ -107,6 +107,16 @@ function AdminLayout() {
           </Link>
 
 
+          {/* GRADING */}
+
+          <Link
+            to="/admin/grading"
+            className="nav-link text-white mb-2"
+          >
+            ✅ Grading
+          </Link>
+
+
           {/* PERFORMANCE */}
 
           <Link

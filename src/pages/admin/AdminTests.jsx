@@ -289,6 +289,49 @@ function AdminTests() {
   };
 
   // =========================================================
+  // DUPLICATE TEST (copy a test with its questions)
+  // =========================================================
+
+  const handleDuplicate = async (test) => {
+    const name = window.prompt(
+      "Name for the copy:",
+      `Copy of ${test.name}`
+    );
+
+    // Cancel pressed
+    if (name === null) {
+      return;
+    }
+
+    try {
+      const token = getToken();
+
+      await api.post(
+        `/api/admin/tests/${test.id}/duplicate`,
+        { name: name.trim() },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`
+          }
+        }
+      );
+
+      alert("Test duplicated successfully.");
+
+      fetchTests();
+
+    } catch (error) {
+      console.error("Duplicate test error:", error);
+
+      if (typeof error.response?.data === "string") {
+        alert(error.response.data);
+      } else {
+        alert("Failed to duplicate test.");
+      }
+    }
+  };
+
+  // =========================================================
   // DELETE TEST
   // =========================================================
 
@@ -737,6 +780,15 @@ function AdminTests() {
                             }
                           >
                             ⏱ Set Time
+                          </button>
+
+                          <button
+                            className="btn btn-sm btn-outline-secondary"
+                            onClick={() =>
+                              handleDuplicate(test)
+                            }
+                          >
+                            ⧉ Duplicate
                           </button>
 
                           <button

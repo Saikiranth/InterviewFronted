@@ -57,6 +57,16 @@ function AdminLayout() {
           </Link>
 
 
+          {/* USERS */}
+
+          <Link
+            to="/admin/users"
+            className="nav-link text-white mb-2"
+          >
+            👤 Users
+          </Link>
+
+
           {/* TESTS */}
 
           <Link

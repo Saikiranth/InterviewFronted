@@ -611,9 +611,9 @@ function StudentDashboard() {
 
 
   // Date-time shown to students, e.g. "20/10/2026, 6:00:00 pm"
+   // Shown in IST, matching the admin screen and the server rules
   const formatDateTime = (value) =>
-    new Date(value).toLocaleString();
-
+    `${String(value).slice(0, 16).replace("T", " ")} IST`;
 
   const handleLogout = () => {
 

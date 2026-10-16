@@ -665,11 +665,22 @@ function AdminAssignTests() {
   const [selectedTestId, setSelectedTestId] = useState("");
   const [selectedStudentId, setSelectedStudentId] = useState("");
 
+  // Optional scheduling window (datetime-local strings, e.g. "2026-10-20T18:00")
+  const [startDate, setStartDate] = useState("");
+  const [deadline, setDeadline] = useState("");
+
   const [loading, setLoading] = useState(true);
   const [assigning, setAssigning] = useState(false);
 
   const getToken = () => {
     return localStorage.getItem("token");
+  };
+
+  // Formats a backend date-time for display, or a dash when not set
+  const formatDateTime = (value) => {
+    return value
+      ? new Date(value).toLocaleString()
+      : "—";
   };
 
   // =========================================================
@@ -804,11 +815,35 @@ function AdminAssignTests() {
       return;
     }
 
+    // datetime-local values compare correctly as strings (same format)
+    if (startDate && deadline && deadline <= startDate) {
+      alert("The deadline must be after the start date.");
+      return;
+    }
+
+    if (deadline && new Date(deadline) <= new Date()) {
+      alert("The deadline must be in the future.");
+      return;
+    }
+
+    // Dates are optional. They are sent as local date-times
+    // (no timezone), which the backend reads as IST.
+    let assignUrl =
+      `/api/admin/test-assignments/assign?testId=${selectedTestId}&studentId=${selectedStudentId}`;
+
+    if (startDate) {
+      assignUrl += `&startDate=${encodeURIComponent(startDate)}`;
+    }
+
+    if (deadline) {
+      assignUrl += `&deadline=${encodeURIComponent(deadline)}`;
+    }
+
     try {
       setAssigning(true);
 
       const response = await api.post(
-        `/api/admin/test-assignments/assign?testId=${selectedTestId}&studentId=${selectedStudentId}`,
+        assignUrl,
         {},
         {
           headers: {
@@ -827,6 +862,8 @@ function AdminAssignTests() {
 
       setSelectedTestId("");
       setSelectedStudentId("");
+      setStartDate("");
+      setDeadline("");
 
       await fetchAssignments();
 
@@ -985,7 +1022,7 @@ function AdminAssignTests() {
 
               {/* TEST */}
 
-              <div className="col-md-5">
+              <div className="col-md-6">
 
                 <label className="form-label fw-semibold">
                   Select Test
@@ -1027,7 +1064,7 @@ function AdminAssignTests() {
 
               {/* STUDENT */}
 
-              <div className="col-md-5">
+              <div className="col-md-6">
 
                 <label className="form-label fw-semibold">
                   Select Student
@@ -1061,6 +1098,51 @@ function AdminAssignTests() {
                   ))}
 
                 </select>
+
+              </div>
+
+              {/* START DATE (optional) */}
+
+              <div className="col-md-5">
+
+                <label className="form-label fw-semibold">
+                  Available From
+                  <span className="text-muted fw-normal">
+                    {" "}(optional)
+                  </span>
+                </label>
+
+                <input
+                  type="datetime-local"
+                  className="form-control"
+                  value={startDate}
+                  onChange={(event) =>
+                    setStartDate(event.target.value)
+                  }
+                />
+
+              </div>
+
+              {/* DEADLINE (optional) */}
+
+              <div className="col-md-5">
+
+                <label className="form-label fw-semibold">
+                  Deadline
+                  <span className="text-muted fw-normal">
+                    {" "}(optional)
+                  </span>
+                </label>
+
+                <input
+                  type="datetime-local"
+                  className="form-control"
+                  value={deadline}
+                  min={startDate || undefined}
+                  onChange={(event) =>
+                    setDeadline(event.target.value)
+                  }
+                />
 
               </div>
 
@@ -1190,6 +1272,8 @@ function AdminAssignTests() {
                   <th>Student</th>
                   <th>Email</th>
                   <th>Assigned Date</th>
+                  <th>Available From</th>
+                  <th>Deadline</th>
                   <th>Status</th>
                   <th>Action</th>
 
@@ -1204,7 +1288,7 @@ function AdminAssignTests() {
                   <tr>
 
                     <td
-                      colSpan="7"
+                      colSpan="9"
                       className="text-center text-muted py-5"
                     >
                       No test assignments found.
@@ -1254,6 +1338,18 @@ function AdminAssignTests() {
                                 assignment.assignedDate
                               ).toLocaleString()
                             : "N/A"}
+                        </td>
+
+                        <td>
+                          {formatDateTime(
+                            assignment.startDate
+                          )}
+                        </td>
+
+                        <td>
+                          {formatDateTime(
+                            assignment.deadline
+                          )}
                         </td>
 
                         <td>
